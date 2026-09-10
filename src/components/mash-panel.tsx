@@ -10,7 +10,7 @@ import { useBooth } from "@/lib/dj-store";
 import { cn, formatTime } from "@/lib/utils";
 
 const JOBS: { id: MixJob; label: string; blurb: string; title: string }[] = [
-  { id: "stems", label: "Stems", title: "Instrumental A + vocals B", blurb: "Load a separate instrumental and vocal track. Four-bar intro and outro. Automatic vocal separation is not connected yet." },
+  { id: "stems", label: "AI mashup", title: "Instrumental A + vocals B", blurb: "Load two ordinary songs. Demucs separates them automatically, then Mashup Pro combines instrumental A with vocals B." },
   {
     id: "mashup",
     label: "DJ blend",
@@ -69,13 +69,17 @@ export function MashPanel() {
         ? "Producing remix…"
         : job === "both"
           ? "Producing mash + remix…"
-          : "Producing mashup…"
+          : job === "stems"
+            ? "Separating + mashing…"
+            : "Producing mashup…"
       : ready
         ? remix
           ? `Remix ${deckA.name}`
           : job === "both"
             ? `Mash + remix ${deckA.name} × ${deckB.name}`
-            : `Mash ${deckA.name} × ${deckB.name}`
+            : job === "stems"
+              ? `AI mash ${deckA.name} × ${deckB.name}`
+              : `Mash ${deckA.name} × ${deckB.name}`
         : remix
           ? "Load a song"
           : "Load both songs";
@@ -113,15 +117,15 @@ export function MashPanel() {
       </section>
 
       <div className={cn("grid min-w-0 gap-4", remix ? "grid-cols-1" : "sm:grid-cols-2")}>
-        <SongSlot id="a" label={remix ? "Song" : job === "stems" ? "Instrumental A" : "Song A"} />
-        {remix ? null : <SongSlot id="b" label={job === "stems" ? "Vocals B" : "Song B"} />}
+        <SongSlot id="a" label={remix ? "Song" : "Song A"} />
+        {remix ? null : <SongSlot id="b" label="Song B" />}
       </div>
 
       {job === "stems" ? <label className="text-sm text-muted">Vocal pitch shift (semitones)
         <input type="number" min={-12} max={12} step={1} value={vocalSemitones} disabled={busy}
           onChange={(e) => setVocalSemitones(Math.max(-12, Math.min(12, Number(e.target.value) || 0)))}
           className="ml-3 w-20 rounded bg-surface p-2" />
-        <p>Use the original songs’ BPM below. Vocal-only BPM detection can be unreliable. Adjust pitch by ear; automatic key matching is not available.</p>
+        <p>Demucs will isolate the parts automatically. Keep the original-song BPM values below; adjust vocal pitch by ear until automatic key matching is added.</p>
       </label> : null}
       <label className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border md:p-5">
         <span className="text-xs font-medium tracking-widest text-muted uppercase">
