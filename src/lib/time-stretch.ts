@@ -1,5 +1,13 @@
-import soundtouch from "soundtouchjs";
+import * as soundtouchModule from "soundtouchjs";
 
+type SoundTouchModule = typeof soundtouchModule & {
+  default?: {
+    SimpleFilter: typeof soundtouchModule.SimpleFilter;
+    SoundTouch: typeof soundtouchModule.SoundTouch;
+  };
+};
+
+const soundtouch = (soundtouchModule as SoundTouchModule).default ?? soundtouchModule;
 const { SimpleFilter, SoundTouch } = soundtouch;
 
 /** Change tempo independently of pitch. Yield regularly so Stop remains responsive. */
