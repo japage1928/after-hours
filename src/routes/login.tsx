@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, getRouteApi, useNavigate } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/login")({ component: Login });
 
+const rootRoute = getRouteApi("__root__");
+
 function Login() {
+  const { sessionUser } = rootRoute.useRouteContext();
   const { user, isPending } = useCurrentUserState();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"in" | "up">("in");
@@ -15,14 +18,14 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (isPending) {
+  if (isPending && !sessionUser && sessionUser !== null) {
     return (
       <main className="grid min-h-dvh place-items-center bg-bg px-6 text-fg">
         <div className="h-11 w-48 animate-pulse rounded-md bg-surface-2" />
       </main>
     );
   }
-  if (user) return <Navigate to="/" />;
+  if (user || sessionUser) return <Navigate to="/" />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

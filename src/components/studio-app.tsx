@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, getRouteApi } from "@tanstack/react-router";
 import { Library } from "lucide-react";
 import { Toaster } from "sonner";
 import { LibraryPanel } from "@/components/library-panel";
@@ -17,6 +17,8 @@ import { useStudio } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type Room = "mash" | "write";
+
+const rootRoute = getRouteApi("__root__");
 
 export function StudioApp() {
   const hydrate = useStudio((s) => s.hydrate);
@@ -116,16 +118,22 @@ export function StudioApp() {
 }
 
 function AuthSlot() {
+  const { sessionUser } = rootRoute.useRouteContext();
   const { user, isPending } = useCurrentUserState();
-  if (isPending) {
-    return <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />;
-  }
   if (user) {
     return (
       <div className="max-w-[11rem] shrink-0 overflow-hidden [&_span]:truncate">
         <UserButton />
       </div>
     );
+  }
+  if (isPending && sessionUser) {
+    return (
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />
+    );
+  }
+  if (isPending && sessionUser === undefined) {
+    return <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />;
   }
   return (
     <Button variant="secondary" asChild>
