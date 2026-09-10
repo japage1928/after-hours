@@ -9,6 +9,7 @@ import {
 import { uid } from "@/lib/utils";
 import { vocalistById, VOCALISTS } from "@/lib/vocalists";
 import { genreById } from "@/lib/genres";
+import { hasN8nBackend, postN8nJson } from "@/lib/n8n-server";
 
 const MINOR_SEX =
   /\b(child|children|kid|kids|minor|minors|underage|teen|teens|teenage|preteen|loli|pedo)\b/i;
@@ -41,9 +42,6 @@ function syllableBudget(bars: number, bpm: number, mode: string): string {
 export const generateSong = createServerFn({ method: "POST" })
   .validator((input: unknown) => GenerateInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; song: Song } | { ok: false; error: string }> => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "AI is not available in this environment." };
-
     const prompt = data.prompt.toLowerCase();
     const sexual =
       /\b(sex|sexual|nude|naked|porn|fuck|explicit|nsfw|hookup)\b/i.test(data.prompt);
@@ -105,7 +103,9 @@ JSON shape:
   ]
 }`;
 
-    const run = async () => {
+    const runDirect = async () => {
+      const apiKey = process.env.XAI_API_KEY;
+      if (!apiKey) throw new Error("AI is not available in this environment.");
       const res = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -135,11 +135,25 @@ JSON shape:
       return json.choices?.[0]?.message?.content ?? "";
     };
 
+    const run = async () => {
+      if (hasN8nBackend()) {
+        const result = await postN8nJson<Record<string, unknown> | { song?: Record<string, unknown> }>(
+          "song-plan",
+          data,
+          120000,
+        );
+        const payload = "song" in result && result.song ? result.song : result;
+        return JSON.stringify(payload);
+      }
+      return runDirect();
+    };
+
     try {
       let text = "";
       try {
         text = await run();
       } catch (err) {
+        if (hasN8nBackend()) throw err;
         text = await run();
         if (!text) throw err;
       }
