@@ -58,6 +58,9 @@ export function LibraryPanel() {
         </p>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
+          {library.length === 0 ? (
+            <p className="px-1 text-sm text-muted">Write a cut and it lands here.</p>
+          ) : (
           <ul className="flex flex-col gap-2">
             {library.map((song) => (
               <LibraryRow
@@ -74,6 +77,7 @@ export function LibraryPanel() {
               />
             ))}
           </ul>
+          )}
         </div>
 
         {a && b ? (
@@ -122,7 +126,6 @@ function LibraryRow({
         <div className="mt-1.5 flex flex-wrap gap-1">
           {song.explicit ? <Badge tone="rec">E</Badge> : null}
           {song.mode === "mashup" ? <Badge>Mash</Badge> : null}
-          {song.isDemo ? <Badge>House</Badge> : null}
         </div>
       </button>
       <button

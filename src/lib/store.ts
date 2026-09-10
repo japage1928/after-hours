@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { engine, type Mix } from "@/lib/audio-engine";
-import { DEMO_SONGS } from "@/lib/demo-songs";
 import { listSongs, saveSong } from "@/lib/library-api";
 import { generateSong, renderVocal } from "@/lib/song-api";
 import type { GenerateInput, Length, Mode, Song } from "@/lib/types";
@@ -9,16 +8,14 @@ import { voiceIdFor, vocalistById } from "@/lib/vocalists";
 const LIBRARY_KEY = "after-hours.library.v1";
 
 function readLibrary(): Song[] {
-  if (typeof window === "undefined") return DEMO_SONGS;
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(LIBRARY_KEY);
-    if (!raw) return DEMO_SONGS;
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as Song[];
-    const saved = Array.isArray(parsed) ? parsed.filter((s) => s && s.id && s.sections) : [];
-    const demos = DEMO_SONGS.filter((d) => !saved.some((s) => s.id === d.id));
-    return [...demos, ...saved];
+    return Array.isArray(parsed) ? parsed.filter((s) => s && s.id && s.sections && !s.isDemo) : [];
   } catch {
-    return DEMO_SONGS;
+    return [];
   }
 }
 
@@ -147,8 +144,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   vocalistA: "diesel",
   vocalistB: "sal",
   length: "cut",
-  song: DEMO_SONGS[0] ?? null,
-  library: DEMO_SONGS,
+  song: null,
+  library: [],
   libraryOpen: false,
   status: "idle",
   statusText: "Ready",
@@ -174,7 +171,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   hydrate: () => {
     const library = readLibrary();
-    const song = get().song ?? library[0] ?? DEMO_SONGS[0] ?? null;
+    const song = library[0] ?? null;
     if (song) engine.load(song);
     set({
       library,
@@ -193,10 +190,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
     void pullRemoteLibrary().then((remote) => {
       if (!remote) return;
-      const demos = DEMO_SONGS.filter((d) => !remote.some((s) => s.id === d.id));
-      const next = [...demos, ...remote];
-      writeLibrary(next);
-      set({ library: next });
+      writeLibrary(remote);
+      const current = get().song;
+      const next = current ?? remote[0] ?? null;
+      if (next && !current) engine.load(next);
+      set({
+        library: remote,
+        song: next,
+        durationBeats: next ? engine.durationBeats() : 0,
+      });
     });
   },
 

@@ -117,7 +117,7 @@ export const useBooth = create<BoothState>((set, get) => ({
         });
       });
     }
-    if (get().ready && get().deckA.hasTrack && get().deckB.hasTrack) {
+    if (get().ready) {
       try {
         const recents = await listMashCuts();
         set({ recents });
@@ -126,41 +126,18 @@ export const useBooth = create<BoothState>((set, get) => ({
       }
       return;
     }
-    set({ status: "loading", statusText: "Loading songs" });
+    studioEngine.stop();
+    set({
+      ready: true,
+      status: "idle",
+      statusText: "Load song A and song B.",
+      ...snapshot(),
+    });
     try {
-      studioEngine.stop();
-      const result = await Promise.race([
-        djEngine.loadDemos().then(() => "ok" as const),
-        new Promise<"timeout">((resolve) => window.setTimeout(() => resolve("timeout"), 8000)),
-      ]);
-      if (result === "timeout") {
-        set({
-          ready: true,
-          status: "error",
-          error: "Loops took too long. Load two songs instead.",
-          statusText: "Drop two songs to mash.",
-        });
-        return;
-      }
-      set({
-        ready: true,
-        status: "idle",
-        statusText: "Two songs loaded. Mash them, or drop in your own.",
-        ...snapshot(),
-      });
-      try {
-        const recents = await listMashCuts();
-        set({ recents });
-      } catch {
-        /* signed out */
-      }
-    } catch (err) {
-      set({
-        ready: true,
-        status: "error",
-        error: err instanceof Error ? err.message : "Could not load songs.",
-        statusText: "Drop two songs to mash.",
-      });
+      const recents = await listMashCuts();
+      set({ recents });
+    } catch {
+      set({ recents: [] });
     }
   },
 

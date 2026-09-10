@@ -17,7 +17,7 @@ export function PlayerStage() {
   if (!song) {
     return (
       <section className="flex min-h-72 flex-col justify-end rounded-2xl bg-surface p-6 shadow-border">
-        <p className="text-muted">No cut loaded.</p>
+        <p className="text-muted">Write a cut. It plays here.</p>
       </section>
     );
   }
@@ -37,7 +37,6 @@ export function PlayerStage() {
         </p>
         {song.explicit ? <Badge tone="rec">Explicit</Badge> : <Badge>Clean</Badge>}
         {song.mode === "mashup" ? <Badge tone="accent">Mashup</Badge> : null}
-        {song.isDemo ? <Badge>House cut</Badge> : null}
       </div>
 
       <h1 className="font-display mt-3 text-4xl leading-none tracking-tight text-fg md:text-6xl">

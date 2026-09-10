@@ -1,6 +1,5 @@
 import { detectBpm, waveformPeaks, type BpmGuess } from "@/lib/bpm";
 import type { MixPlan } from "@/lib/dj-api";
-import { makeHouseLoop, makeTrapLoop } from "@/lib/dj-loops";
 
 export type DeckId = "a" | "b";
 
@@ -65,7 +64,6 @@ export class DjEngine {
   private pumping = false;
   private raf = 0;
   private mixTimer = 0;
-  private demoJob: Promise<void> | null = null;
   private decks: Record<DeckId, DeckNodes>;
 
   constructor() {
@@ -169,22 +167,6 @@ export class DjEngine {
       ]);
     }
     this.startPump();
-  }
-
-  async loadDemos(): Promise<void> {
-    if (!this.demoJob) {
-      this.demoJob = (async () => {
-        try {
-          const [house, trap] = await Promise.all([makeHouseLoop(), makeTrapLoop()]);
-          if (!this.decks.a.buffer) this.setBuffer("a", house, "Last Light", 124, true);
-          if (!this.decks.b.buffer) this.setBuffer("b", trap, "Night Shift", 140, true);
-        } catch (err) {
-          this.demoJob = null;
-          throw err;
-        }
-      })();
-    }
-    await this.demoJob;
   }
 
   async decodeFile(file: File): Promise<AudioBuffer> {
