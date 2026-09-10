@@ -4,7 +4,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "After Hours";
+const APP_NAME = "Mashup Pro";
 
 const fetchSessionUser = createServerFn({ method: "GET" }).handler(async () => {
   try {

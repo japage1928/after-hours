@@ -1,3 +1,4 @@
+import { encodeWav } from "@/lib/audio-export";
 import { create } from "zustand";
 import { detectBpm, analyzeTrack } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixJob, type MixPlan } from "@/lib/dj-api";
@@ -7,9 +8,14 @@ import { listMashCuts, saveMashCut, type MashCut } from "@/lib/library-api";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
-export type BoothStatus = "idle" | "loading" | "planning" | "mixing" | "error";
+export type BoothStatus = "idle" | "loading" | "planning" | "rendering" | "mixing" | "error";
 
 type BoothState = {
+  hasOutput: boolean;
+  vocalSemitones: number;
+  setVocalSemitones: (value: number) => void;
+  setTiming: (id: DeckId, bpm: number, offset: number) => void;
+  download: () => void;
   ready: boolean;
   status: BoothStatus;
   statusText: string;
@@ -48,6 +54,7 @@ type BoothState = {
 };
 
 let tickBound = false;
+let revision = 0;
 
 function snapshot(): Pick<
   BoothState,
@@ -66,6 +73,29 @@ function snapshot(): Pick<
 }
 
 export const useBooth = create<BoothState>((set, get) => ({
+  hasOutput: false,
+  vocalSemitones: 0,
+  setVocalSemitones: (value) => {
+    revision++;
+    djEngine.invalidateRender();
+    djEngine.vocalSemitones = value;
+    set({ vocalSemitones: value, plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
+  },
+  setTiming: (id, bpm, offset) => {
+    revision++;
+    djEngine.setTiming(id, bpm, offset);
+    set({ plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
+  },
+  download: () => {
+    const buffer = djEngine.outputBuffer();
+    if (!buffer) return;
+    const url = URL.createObjectURL(new Blob([encodeWav(buffer)], { type: "audio/wav" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mashup-pro-${get().job}.wav`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  },
   ready: false,
   status: "idle",
   statusText: "Pick mashup, remix, or both.",
@@ -89,9 +119,14 @@ export const useBooth = create<BoothState>((set, get) => ({
   job: "mashup",
 
   setJob: (job) => {
+    revision++;
+    djEngine.invalidateRender();
     const remix = job === "remix";
     set({
       job,
+      hasOutput: false,
+      error: null,
+      ...snapshot(),
       plan: null,
       cue: null,
       status: "idle",
@@ -103,7 +138,11 @@ export const useBooth = create<BoothState>((set, get) => ({
     });
   },
 
-  setPrompt: (prompt) => set({ prompt }),
+  setPrompt: (prompt) => {
+    revision++;
+    djEngine.invalidateRender();
+    set({ prompt, plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
+  },
 
   setXfader: (v) => {
     djEngine.setXfader(v);
@@ -160,6 +199,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   loadFile: async (id, file) => {
+    if (["loading", "planning", "rendering"].includes(get().status)) return;
     if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
       set({ status: "error", error: "That file is not audio.", statusText: "Need an audio file." });
       return;
@@ -172,7 +212,10 @@ export const useBooth = create<BoothState>((set, get) => ({
       });
       return;
     }
+    const currentRevision = ++revision;
+    djEngine.invalidateRender();
     set({
+      plan: null, cue: null, hasOutput: false,
       status: "loading",
       statusText: `Reading ${file.name}`,
       error: null,
@@ -180,6 +223,8 @@ export const useBooth = create<BoothState>((set, get) => ({
     try {
       studioEngine.stop();
       const buffer = await djEngine.decodeFile(file);
+      if (currentRevision !== revision) return;
+      if (buffer.duration < 2 || buffer.duration > 600) throw new Error("Choose audio between 2 seconds and 10 minutes.");
       const guess = detectBpm(buffer);
       djEngine.loadUpload(id, buffer, file.name, guess);
       set({
@@ -188,6 +233,7 @@ export const useBooth = create<BoothState>((set, get) => ({
         ...snapshot(),
       });
     } catch (err) {
+      if (currentRevision !== revision) return;
       set({
         status: "error",
         error: err instanceof Error ? err.message : "Could not decode that track.",
@@ -218,6 +264,8 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   dropMix: async () => {
+    if (["loading", "planning", "rendering"].includes(get().status)) return;
+    const currentRevision = ++revision;
     const { deckA, deckB, prompt, job } = get();
     if (!deckA.hasTrack) {
       set({ status: "error", error: "Load a song first.", statusText: "Need a track." });
@@ -228,6 +276,9 @@ export const useBooth = create<BoothState>((set, get) => ({
       return;
     }
     studioEngine.stop();
+    djEngine.invalidateRender();
+    set({ hasOutput: false });
+    try {
     const verb =
       job === "remix" ? "Producing remix" : job === "both" ? "Producing mash + remix" : "Producing mashup";
     set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
@@ -242,8 +293,8 @@ export const useBooth = create<BoothState>((set, get) => ({
         .join(",");
     const input = {
       job,
-      nameA: deckA.name,
-      nameB: job === "remix" ? "" : deckB.name,
+      nameA: deckA.name.slice(0, 80),
+      nameB: job === "remix" ? "" : deckB.name.slice(0, 80),
       bpmA: deckA.bpm,
       bpmB: job === "remix" ? deckA.bpm : deckB.bpm,
       durationA: deckA.duration,
@@ -263,14 +314,16 @@ export const useBooth = create<BoothState>((set, get) => ({
     } catch {
       /* local plan */
     }
+    if (currentRevision !== revision) return;
     set({
       plan,
       cue: plan.cue,
-      status: "mixing",
-      statusText: plan.cue,
+      status: "rendering",
+      statusText: "Rendering audio…",
     });
     await djEngine.runPlan(plan);
-    set(snapshot());
+    if (currentRevision !== revision) return;
+    set({ ...snapshot(), hasOutput: true, status: "mixing", statusText: "Ready. Play or download your WAV." });
     void saveMashCut({
       data: {
         nameA: deckA.name,
@@ -285,11 +338,16 @@ export const useBooth = create<BoothState>((set, get) => ({
       .catch(() => {
         /* signed out */
       });
+    } catch (err) {
+      if (currentRevision !== revision) return;
+      set({ status: "error", error: err instanceof Error ? err.message : "Could not render the mix.", statusText: "Rendering failed. Check your audio and try again.", hasOutput: false, ...snapshot() });
+    }
   },
 
   playMash: async () => {
+    if (["loading", "planning", "rendering"].includes(get().status)) return;
     const plan = get().plan;
-    if (plan) {
+    if (plan && get().hasOutput) {
       studioEngine.stop();
       await djEngine.runPlan(plan);
       set({ status: "mixing", statusText: plan.cue, ...snapshot() });
@@ -299,6 +357,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   stopMix: () => {
+    revision++;
     djEngine.stopAll();
     set({
       status: "idle",

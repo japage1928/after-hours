@@ -1,4 +1,5 @@
-export function snapClubBpm(bpm: number, job: "mashup" | "remix" | "both") {
+export function snapClubBpm(bpm: number, job: "mashup" | "remix" | "both" | "stems") {
+  if (job === "stems") return Math.min(180, Math.max(70, bpm));
   const x = Math.min(150, Math.max(100, bpm));
   if (job === "mashup") return Math.round(x);
   if (x < 122) return 126;

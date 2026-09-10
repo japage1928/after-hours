@@ -1,5 +1,6 @@
+import { stretchAudio } from "./time-stretch.ts";
 import type { MixPlan } from "@/lib/dj-api";
-import { snapClubBpm } from "@/lib/bpm";
+import { snapClubBpm } from "./bpm.ts";
 
 type RenderInput = {
   sourceA: AudioBuffer;
@@ -9,6 +10,8 @@ type RenderInput = {
   offsetA: number;
   offsetB: number;
   plan: MixPlan;
+  signal?: AbortSignal;
+  vocalSemitones?: number;
 };
 
 function clamp(n: number, lo: number, hi: number) {
@@ -281,19 +284,29 @@ function bus(offline: OfflineAudioContext, hpHz: number) {
 }
 
 export async function renderRemix(input: RenderInput): Promise<AudioBuffer> {
-  const { sourceA, sourceB, plan } = input;
+  const { plan } = input;
+  let { sourceA, sourceB } = input;
   const sr = sourceA.sampleRate;
   const job = plan.job;
   const target = snapClubBpm(plan.targetBpm, job);
   const bpmA = Math.max(70, input.bpmA || 120);
   const bpmB = Math.max(70, input.bpmB || bpmA);
-  const rateA = clamp(target / bpmA, 0.8, 1.25);
-  const rateB = clamp(target / bpmB, 0.8, 1.25);
-  const barA = (60 / bpmA) * 4;
-  const barB = (60 / bpmB) * 4;
+  const tempoA = target / bpmA;
+  const tempoB = target / bpmB;
+  sourceA = await stretchAudio(sourceA, tempoA, 0, input.signal);
+  if (sourceB) sourceB = await stretchAudio(sourceB, tempoB, input.vocalSemitones ?? 0, input.signal);
+  input.signal?.throwIfAborted();
+  const rateA = 1, rateB = 1;
+  const barA = (60 / target) * 4;
+  const barB = barA;
   const barOut = (60 / target) * 4;
   const beat = 60 / target;
-  const bars = 32;
+  const bars = job === "stems"
+    ? Math.min(32, Math.floor((sourceA.duration - input.offsetA / tempoA) / barOut))
+    : 32;
+  if (job === "stems" && bars < 12) {
+    throw new Error("The instrumental needs at least 12 bars after its cue point for an intro, vocals and outro.");
+  }
   const outDur = bars * barOut;
   const offline = new OfflineAudioContext(2, Math.ceil(outDur * sr), sr);
 
@@ -320,19 +333,32 @@ export async function renderRemix(input: RenderInput): Promise<AudioBuffer> {
   wet.connect(master);
 
   const drums = offline.createGain();
-  drums.gain.value = job === "mashup" ? 0 : 0.86;
+  drums.gain.value = (job === "mashup" || job === "stems") ? 0 : 0.86;
   drums.connect(master);
 
   const dropBar =
     job === "mashup" ? 16 : clamp(Math.round((plan.dropSec || 8 * barOut) / barOut / 8) * 8, 8, 16);
-  const kicks = job === "mashup" ? [] : scheduleDrums(offline, drums, target, bars, job === "both" ? 8 : dropBar);
+  const kicks = (job === "mashup" || job === "stems") ? [] : scheduleDrums(offline, drums, target, bars, job === "both" ? 8 : dropBar);
 
-  const startA = snapBar(plan.aOffsetSec || input.offsetA, barA, sourceA.duration, 8);
+  const startA = snapBar((plan.aOffsetSec ?? input.offsetA) / tempoA, barA, sourceA.duration, 8);
   const startB = sourceB
-    ? snapBar(plan.bOffsetSec || input.offsetB, barB, sourceB.duration, 8)
+    ? snapBar((plan.bOffsetSec ?? input.offsetB) / tempoB, barB, sourceB.duration, 8)
     : 0;
 
-  if (job === "mashup" && sourceB) {
+  if (job === "stems" && sourceB) {
+    // Already-separated files only: never pretend an EQ filter removes vocals.
+    const instrumental = bus(offline, 30);
+    const vocals = bus(offline, 75);
+    instrumental.g.connect(master);
+    vocals.g.connect(master);
+    instrumental.g.gain.value = 0.75;
+    vocals.g.gain.value = 0.9;
+    const intro = 4 * barOut;
+    playGrain(offline, sourceA, instrumental.hp, 0, input.offsetA / tempoA,
+      Math.min(sourceA.duration - input.offsetA / tempoA, outDur), 1, 1);
+    playGrain(offline, sourceB, vocals.hp, intro, input.offsetB / tempoB,
+      Math.min(sourceB.duration - input.offsetB / tempoB, outDur - intro - 4 * barOut), 1, 1);
+  } else if (job === "mashup" && sourceB) {
     const aBus = bus(offline, 40);
     const bBus = bus(offline, 320);
     aBus.g.connect(master);
@@ -388,5 +414,24 @@ export async function renderRemix(input: RenderInput): Promise<AudioBuffer> {
     }
   }
 
-  return offline.startRendering();
+  // Fade the complete mix, including delays and drums, to avoid an abrupt cut.
+  master.gain.setValueAtTime(0, 0);
+  master.gain.linearRampToValueAtTime(0.95, 0.02);
+  master.gain.setValueAtTime(0.95, outDur - barOut);
+  master.gain.linearRampToValueAtTime(0, outDur);
+  const rendered = await offline.startRendering();
+  input.signal?.throwIfAborted();
+  let peak = 0;
+  for (let c = 0; c < rendered.numberOfChannels; c++) {
+    for (const sample of rendered.getChannelData(c)) {
+      if (!Number.isFinite(sample)) throw new Error("The mix contains invalid audio. Try another track.");
+      peak = Math.max(peak, Math.abs(sample));
+    }
+  }
+  if (peak < 0.00001) throw new Error("The result is silent. Check your tracks and cue points.");
+  if (peak > 0.98) for (let c = 0; c < rendered.numberOfChannels; c++) {
+    const data = rendered.getChannelData(c);
+    for (let i = 0; i < data.length; i++) data[i] *= 0.98 / peak;
+  }
+  return rendered;
 }

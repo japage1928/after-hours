@@ -50,7 +50,7 @@ export function StudioApp() {
             Late-night studio
           </p>
           <p className="font-display text-3xl leading-none tracking-tight text-fg md:text-4xl">
-            After Hours
+            Mashup Pro
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
