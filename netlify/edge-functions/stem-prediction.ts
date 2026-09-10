@@ -3,7 +3,7 @@ const DEMUCS_VERSION = "25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa0
 
 function authHeaders(token: string) {
   return {
-    Authorization: `Token ${token}`,
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -47,7 +47,7 @@ export default async function stemPrediction(request: Request) {
         return Response.json({ error: "Invalid prediction id." }, { status: 400 });
       }
       const upstream = await fetch(`${REPLICATE_PREDICTIONS_URL}/${encodeURIComponent(id)}`, {
-        headers: { Authorization: `Token ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       return new Response(await upstream.text(), {
         status: upstream.status,
