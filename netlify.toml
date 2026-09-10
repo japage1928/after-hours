@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build && node scripts/bootstrap-admin.mjs"
+  command = "npm run build"
   publish = "dist/client"
 
 [build.environment]
