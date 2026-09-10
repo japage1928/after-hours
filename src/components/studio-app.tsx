@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Library } from "lucide-react";
 import { Toaster } from "sonner";
 import { LibraryPanel } from "@/components/library-panel";
@@ -7,6 +8,8 @@ import { PlayerStage } from "@/components/player-stage";
 import { TransportBar } from "@/components/transport-bar";
 import { WritePanel } from "@/components/write-panel";
 import { Button } from "@/components/ui/button";
+import { UserButton } from "@/lib/auth/gates";
+import { useCurrentUser, useCurrentUserState } from "@/lib/auth/use-current-user";
 import { djEngine } from "@/lib/dj-engine";
 import { engine } from "@/lib/audio-engine";
 import { useBooth } from "@/lib/dj-store";
@@ -19,10 +22,11 @@ export function StudioApp() {
   const hydrate = useStudio((s) => s.hydrate);
   const libraryOpen = useStudio((s) => s.libraryOpen);
   const [room, setRoom] = useState<Room>("mash");
+  const user = useCurrentUser();
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+  }, [hydrate, user?.id]);
 
   const go = (next: Room) => {
     if (next === room) return;
@@ -77,6 +81,7 @@ export function StudioApp() {
               Tape shelf
             </Button>
           ) : null}
+          <AuthSlot />
         </div>
       </header>
 
@@ -107,5 +112,24 @@ export function StudioApp() {
         }}
       />
     </div>
+  );
+}
+
+function AuthSlot() {
+  const { user, isPending } = useCurrentUserState();
+  if (isPending) {
+    return <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />;
+  }
+  if (user) {
+    return (
+      <div className="max-w-[11rem] shrink-0 overflow-hidden [&_span]:truncate">
+        <UserButton />
+      </div>
+    );
+  }
+  return (
+    <Button variant="secondary" asChild>
+      <Link to="/login">Sign in</Link>
+    </Button>
   );
 }

@@ -3,6 +3,7 @@ import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
+import { listMashCuts, saveMashCut, type MashCut } from "@/lib/library-api";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -28,6 +29,7 @@ type BoothState = {
   volB: number;
   eqA: { low: number; mid: number; high: number };
   eqB: { low: number; mid: number; high: number };
+  recents: MashCut[];
   hydrate: () => Promise<void>;
   setPrompt: (v: string) => void;
   setXfader: (v: number) => void;
@@ -81,6 +83,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   volB: 0.92,
   eqA: { low: 0, mid: 0, high: 0 },
   eqB: { low: 0, mid: 0, high: 0 },
+  recents: [],
 
   setPrompt: (prompt) => set({ prompt }),
 
@@ -114,7 +117,15 @@ export const useBooth = create<BoothState>((set, get) => ({
         });
       });
     }
-    if (get().ready && get().deckA.hasTrack && get().deckB.hasTrack) return;
+    if (get().ready && get().deckA.hasTrack && get().deckB.hasTrack) {
+      try {
+        const recents = await listMashCuts();
+        set({ recents });
+      } catch {
+        set({ recents: [] });
+      }
+      return;
+    }
     set({ status: "loading", statusText: "Loading songs" });
     try {
       studioEngine.stop();
@@ -137,6 +148,12 @@ export const useBooth = create<BoothState>((set, get) => ({
         statusText: "Two songs loaded. Mash them, or drop in your own.",
         ...snapshot(),
       });
+      try {
+        const recents = await listMashCuts();
+        set({ recents });
+      } catch {
+        /* signed out */
+      }
     } catch (err) {
       set({
         ready: true,
@@ -237,6 +254,20 @@ export const useBooth = create<BoothState>((set, get) => ({
     });
     await djEngine.runPlan(plan);
     set(snapshot());
+    void saveMashCut({
+      data: {
+        nameA: deckA.name,
+        nameB: deckB.name,
+        bpmA: deckA.bpm,
+        bpmB: deckB.bpm,
+        cue: plan.cue,
+      },
+    })
+      .then(() => listMashCuts())
+      .then((recents) => set({ recents }))
+      .catch(() => {
+        /* signed out */
+      });
   },
 
   playMash: async () => {

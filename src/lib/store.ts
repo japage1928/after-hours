@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { engine, type Mix } from "@/lib/audio-engine";
 import { DEMO_SONGS } from "@/lib/demo-songs";
+import { listSongs, saveSong } from "@/lib/library-api";
 import { generateSong, renderVocal } from "@/lib/song-api";
 import type { GenerateInput, Length, Mode, Song } from "@/lib/types";
 import { voiceIdFor, vocalistById } from "@/lib/vocalists";
@@ -25,6 +26,21 @@ function writeLibrary(songs: Song[]) {
   if (typeof window === "undefined") return;
   const persist = songs.filter((s) => !s.isDemo).slice(0, 24);
   window.localStorage.setItem(LIBRARY_KEY, JSON.stringify(persist));
+}
+
+function persistSong(song: Song, library: Song[]) {
+  writeLibrary(library);
+  void saveSong({ data: song }).catch(() => {
+    /* signed out — local shelf still holds it */
+  });
+}
+
+async function pullRemoteLibrary(): Promise<Song[] | null> {
+  try {
+    return await listSongs();
+  } catch {
+    return null;
+  }
 }
 
 export type Status = "idle" | "writing" | "rendering" | "ready" | "error";
@@ -175,6 +191,13 @@ export const useStudio = create<StudioState>((set, get) => ({
         });
       });
     }
+    void pullRemoteLibrary().then((remote) => {
+      if (!remote) return;
+      const demos = DEMO_SONGS.filter((d) => !remote.some((s) => s.id === d.id));
+      const next = [...demos, ...remote];
+      writeLibrary(next);
+      set({ library: next });
+    });
   },
 
   loadSong: (song, render = false) => {
@@ -245,7 +268,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const song = res.song;
     engine.load(song);
     const library = [song, ...get().library.filter((x) => x.id !== song.id)].slice(0, 28);
-    writeLibrary(library);
+    persistSong(song, library);
     set({
       song,
       library,
@@ -330,7 +353,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const song = res.song;
     engine.load(song);
     const library = [song, ...get().library.filter((x) => x.id !== song.id)].slice(0, 28);
-    writeLibrary(library);
+    persistSong(song, library);
     set({
       song,
       library,

@@ -3,6 +3,7 @@ import { Pause, Play, Shuffle, Square, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Visualizer } from "@/components/visualizer";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { djEngine, type DeckId } from "@/lib/dj-engine";
 import { useBooth } from "@/lib/dj-store";
 import { cn, formatTime } from "@/lib/utils";
@@ -17,15 +18,17 @@ export function MashPanel() {
   const dropMix = useBooth((s) => s.dropMix);
   const playMash = useBooth((s) => s.playMash);
   const stopMix = useBooth((s) => s.stopMix);
+  const recents = useBooth((s) => s.recents);
   const deckA = useBooth((s) => s.deckA);
   const deckB = useBooth((s) => s.deckB);
   const timeA = useBooth((s) => s.timeA);
+  const user = useCurrentUser();
   const busy = status === "loading" || status === "planning";
   const ready = deckA.hasTrack && deckB.hasTrack;
 
   useEffect(() => {
     void hydrate();
-  }, [hydrate]);
+  }, [hydrate, user?.id]);
 
   return (
     <div className="mx-auto flex max-w-3xl min-w-0 flex-col gap-5 px-4 pb-44 md:px-8">
@@ -77,6 +80,26 @@ export function MashPanel() {
           {playing ? " · in the mash" : ""}
         </p>
       </section>
+
+      {recents.length > 0 ? (
+        <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
+          <p className="text-xs font-medium tracking-widest text-muted uppercase">
+            Your mashes
+          </p>
+          <ul className="flex flex-col gap-2">
+            {recents.slice(0, 8).map((cut) => (
+              <li key={cut.id} className="min-w-0">
+                <p className="truncate text-sm text-fg">
+                  {cut.nameA} × {cut.nameB}
+                </p>
+                {cut.cue ? (
+                  <p className="truncate text-xs text-muted italic">{cut.cue}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
