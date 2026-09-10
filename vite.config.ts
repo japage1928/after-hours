@@ -159,6 +159,12 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // soundtouchjs 0.x ships ESM syntax in a package shape Node can misclassify
+  // as CommonJS. Force Vite to bundle it for SSR so Netlify never asks Node to
+  // execute the raw dependency directly.
+  ssr: {
+    noExternal: ["soundtouchjs"],
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
