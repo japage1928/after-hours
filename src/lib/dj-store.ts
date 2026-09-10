@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { detectBpm } from "@/lib/bpm";
-import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
+import { fallbackPlan, planMix, type MixJob, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
 import { listMashCuts, saveMashCut, type MashCut } from "@/lib/library-api";
@@ -30,7 +30,9 @@ type BoothState = {
   eqA: { low: number; mid: number; high: number };
   eqB: { low: number; mid: number; high: number };
   recents: MashCut[];
+  job: MixJob;
   hydrate: () => Promise<void>;
+  setJob: (job: MixJob) => void;
   setPrompt: (v: string) => void;
   setXfader: (v: number) => void;
   setVolume: (id: DeckId, v: number) => void;
@@ -66,7 +68,7 @@ function snapshot(): Pick<
 export const useBooth = create<BoothState>((set, get) => ({
   ready: false,
   status: "idle",
-  statusText: "Load song A and song B.",
+  statusText: "Pick mashup, remix, or both.",
   error: null,
   prompt: "",
   cue: null,
@@ -84,6 +86,22 @@ export const useBooth = create<BoothState>((set, get) => ({
   eqA: { low: 0, mid: 0, high: 0 },
   eqB: { low: 0, mid: 0, high: 0 },
   recents: [],
+  job: "mashup",
+
+  setJob: (job) => {
+    const remix = job === "remix";
+    set({
+      job,
+      plan: null,
+      cue: null,
+      status: "idle",
+      statusText: remix
+        ? "Load one song to remix."
+        : job === "both"
+          ? "Load two songs. We mash them and remix the blend."
+          : "Load song A and song B.",
+    });
+  },
 
   setPrompt: (prompt) => set({ prompt }),
 
@@ -130,7 +148,7 @@ export const useBooth = create<BoothState>((set, get) => ({
     set({
       ready: true,
       status: "idle",
-      statusText: "Load song A and song B.",
+      statusText: "Load a song, then pick mashup, remix, or both.",
       ...snapshot(),
     });
     try {
@@ -200,20 +218,26 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   dropMix: async () => {
-    const { deckA, deckB, prompt } = get();
-    if (!deckA.hasTrack || !deckB.hasTrack) {
+    const { deckA, deckB, prompt, job } = get();
+    if (!deckA.hasTrack) {
+      set({ status: "error", error: "Load a song first.", statusText: "Need a track." });
+      return;
+    }
+    if (job !== "remix" && !deckB.hasTrack) {
       set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." });
       return;
     }
     studioEngine.stop();
-    set({ status: "planning", statusText: "Mashing the two songs", error: null, cue: null });
+    const verb = job === "remix" ? "Remixing" : job === "both" ? "Mashing and remixing" : "Mashing";
+    set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
     const input = {
+      job,
       nameA: deckA.name,
-      nameB: deckB.name,
+      nameB: job === "remix" ? "" : deckB.name,
       bpmA: deckA.bpm,
-      bpmB: deckB.bpm,
+      bpmB: job === "remix" ? deckA.bpm : deckB.bpm,
       durationA: deckA.duration,
-      durationB: deckB.duration,
+      durationB: job === "remix" ? 0 : deckB.duration,
       prompt: prompt.trim(),
     };
     let plan: MixPlan = fallbackPlan(input);
@@ -234,9 +258,9 @@ export const useBooth = create<BoothState>((set, get) => ({
     void saveMashCut({
       data: {
         nameA: deckA.name,
-        nameB: deckB.name,
+        nameB: job === "remix" ? "remix" : job === "both" ? `${deckB.name} · remix mash` : deckB.name,
         bpmA: deckA.bpm,
-        bpmB: deckB.bpm,
+        bpmB: job === "remix" ? plan.targetBpm : deckB.bpm,
         cue: plan.cue,
       },
     })

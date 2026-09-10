@@ -57,7 +57,7 @@ export function StudioApp() {
           <div className="flex rounded-md bg-surface-2 p-1 shadow-border">
             {(
               [
-                ["mash", "Mash"],
+                ["mash", "Mix"],
                 ["write", "Write"],
               ] as const
             ).map(([id, label]) => (
@@ -89,7 +89,7 @@ export function StudioApp() {
 
       <p className="mx-auto max-w-7xl px-4 pb-4 text-sm text-muted md:px-8">
         {room === "mash"
-          ? "Load song A and song B. Mash them into one cut."
+          ? "Mashup two songs, remix one, or both."
           : "Write original songs. Explicit if you want. Two voices on one beat."}
       </p>
 

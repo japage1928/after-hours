@@ -64,6 +64,7 @@ export class DjEngine {
   private pumping = false;
   private raf = 0;
   private mixTimer = 0;
+  private remixDuck = 1;
   private decks: Record<DeckId, DeckNodes>;
 
   constructor() {
@@ -294,6 +295,7 @@ export class DjEngine {
 
   stopAll() {
     this.clearMixTimer();
+    this.remixDuck = 1;
     this.stopDeck("a");
     this.stopDeck("b");
   }
@@ -320,7 +322,18 @@ export class DjEngine {
     await this.ensure();
     if (!this.ctx) return;
     this.stopAll();
+    this.remixDuck = 1;
+    this.applyRemixTone(plan);
     this.setTargetBpm(plan.targetBpm);
+    if (plan.job === "remix") {
+      this.setXfader(-1);
+      this.setFilter("a", plan.sweepA ? 0.55 : 0);
+      this.setFilter("b", 0);
+      const now = this.ctx.currentTime + 0.08;
+      await this.playDeck("a", plan.aOffsetSec, now);
+      this.animateJob(plan, true);
+      return;
+    }
     this.setXfader(-1);
     this.setFilter("a", 0);
     this.setFilter("b", 0);
@@ -328,13 +341,44 @@ export class DjEngine {
     await this.playDeck("a", plan.aOffsetSec, now);
     const bWhen = now + plan.mixInSec;
     await this.playDeck("b", plan.bOffsetSec, bWhen);
+    this.animateJob(plan, false);
+  }
+
+  private applyRemixTone(plan: MixPlan) {
+    const remix = plan.job === "remix" || plan.job === "both";
+    const bass = remix ? plan.bassBoost : 0;
+    const mid = remix ? plan.midCut : 0;
+    const air = remix ? plan.air : 0;
+    this.setEq("a", "low", bass);
+    this.setEq("a", "mid", mid);
+    this.setEq("a", "high", air);
+    this.setEq("b", "low", remix ? bass * 0.85 : 0);
+    this.setEq("b", "mid", remix ? mid : 0);
+    this.setEq("b", "high", remix ? air : 0);
+  }
+
+  private animateJob(plan: MixPlan, remixOnly: boolean) {
     const t0 = performance.now();
     const mixInMs = plan.mixInSec * 1000;
     const fadeMs = plan.crossfadeSec * 1000;
-    const holdMs = plan.holdSec * 1000;
+    const holdMs = (plan.holdSec + plan.dropSec) * 1000;
+    const dropMs = plan.dropSec * 1000;
+    const beatMs = (60 / Math.max(70, plan.targetBpm)) * 1000;
     const tick = () => {
       const t = performance.now() - t0;
-      if (t < mixInMs) {
+      if (plan.pump) {
+        const phase = (t % beatMs) / beatMs;
+        this.remixDuck = 0.74 + 0.26 * phase;
+      } else {
+        this.remixDuck = 1;
+      }
+      if (remixOnly) {
+        if (plan.sweepA) {
+          const u = Math.min(1, t / Math.max(400, dropMs));
+          this.setFilter("a", 0.55 * (1 - u));
+        }
+        this.setXfader(-1);
+      } else if (t < mixInMs) {
         this.setXfader(-1);
         if (plan.sweepA) this.setFilter("a", 0);
       } else if (t < mixInMs + fadeMs) {
@@ -345,6 +389,7 @@ export class DjEngine {
         this.setXfader(1);
         if (plan.sweepA) this.setFilter("a", 1);
       }
+      this.applyXfader(this.xfader);
       if (t < mixInMs + fadeMs + holdMs) {
         this.mixTimer = window.requestAnimationFrame(tick);
       }
@@ -393,8 +438,9 @@ export class DjEngine {
     const a = Math.cos(((x + 1) / 2) * (Math.PI / 2));
     const b = Math.sin(((x + 1) / 2) * (Math.PI / 2));
     const t = this.ctx?.currentTime ?? 0;
-    this.decks.a.gain?.gain.setTargetAtTime(a * this.decks.a.volume, t, 0.03);
-    this.decks.b.gain?.gain.setTargetAtTime(b * this.decks.b.volume, t, 0.03);
+    const duck = this.remixDuck;
+    this.decks.a.gain?.gain.setTargetAtTime(a * this.decks.a.volume * duck, t, 0.03);
+    this.decks.b.gain?.gain.setTargetAtTime(b * this.decks.b.volume * duck, t, 0.03);
   }
 
   private applyFilter(id: DeckId) {

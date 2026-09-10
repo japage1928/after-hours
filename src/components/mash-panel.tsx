@@ -4,12 +4,43 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Visualizer } from "@/components/visualizer";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import type { MixJob } from "@/lib/dj-api";
 import { djEngine, type DeckId } from "@/lib/dj-engine";
 import { useBooth } from "@/lib/dj-store";
 import { cn, formatTime } from "@/lib/utils";
 
+const JOBS: { id: MixJob; label: string; blurb: string; title: string }[] = [
+  {
+    id: "mashup",
+    label: "Mashup",
+    title: "Song A × Song B",
+    blurb: "Two tracks, beat-matched into one cut.",
+  },
+  {
+    id: "remix",
+    label: "Remix",
+    title: "One song, remixed",
+    blurb: "One track. New tempo, darker intro, a drop.",
+  },
+  {
+    id: "both",
+    label: "Both",
+    title: "Mashup + remix",
+    blurb: "Two tracks mashed, then restyled as a remix.",
+  },
+];
+
+function cutTitle(nameA: string, nameB: string) {
+  if (nameB === "remix") return `${nameA} remix`;
+  return `${nameA} × ${nameB}`;
+}
+
 export function MashPanel() {
   const hydrate = useBooth((s) => s.hydrate);
+  const job = useBooth((s) => s.job);
+  const setJob = useBooth((s) => s.setJob);
+  const prompt = useBooth((s) => s.prompt);
+  const setPrompt = useBooth((s) => s.setPrompt);
   const status = useBooth((s) => s.status);
   const statusText = useBooth((s) => s.statusText);
   const error = useBooth((s) => s.error);
@@ -24,7 +55,25 @@ export function MashPanel() {
   const timeA = useBooth((s) => s.timeA);
   const user = useCurrentUser();
   const busy = status === "loading" || status === "planning";
-  const ready = deckA.hasTrack && deckB.hasTrack;
+  const remix = job === "remix";
+  const ready = remix ? deckA.hasTrack : deckA.hasTrack && deckB.hasTrack;
+  const current = JOBS.find((j) => j.id === job) ?? JOBS[0];
+  const action =
+    status === "planning"
+      ? remix
+        ? "Remixing…"
+        : job === "both"
+          ? "Mashing + remixing…"
+          : "Mashing…"
+      : ready
+        ? remix
+          ? `Remix ${deckA.name}`
+          : job === "both"
+            ? `Mash + remix ${deckA.name} × ${deckB.name}`
+            : `Mash ${deckA.name} × ${deckB.name}`
+        : remix
+          ? "Load a song"
+          : "Load both songs";
 
   useEffect(() => {
     void hydrate();
@@ -32,22 +81,55 @@ export function MashPanel() {
 
   return (
     <div className="mx-auto flex max-w-3xl min-w-0 flex-col gap-5 px-4 pb-44 md:px-8">
-      <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-6">
+      <section className="flex min-w-0 flex-col gap-4 rounded-2xl bg-surface p-4 shadow-border md:p-6">
         <p className="text-xs font-medium tracking-widest text-muted uppercase">
-          Mashup
+          Mix
         </p>
         <h1 className="font-display text-4xl leading-none tracking-tight text-fg md:text-5xl">
-          Song A × Song B
+          {current.title}
         </h1>
-        <p className="text-sm text-muted">
-          Load two tracks you have the right to mix. We beat-match them into one cut.
-        </p>
+        <p className="text-sm text-muted">{current.blurb}</p>
+        <div className="flex rounded-md bg-surface-2 p-1 shadow-border">
+          {JOBS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setJob(item.id)}
+              className={cn(
+                "h-11 flex-1 rounded-sm px-2 text-sm font-medium transition-colors duration-150",
+                job === item.id ? "bg-accent text-accent-fg" : "text-muted hover:text-fg",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </section>
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <SongSlot id="a" label="Song A" />
-        <SongSlot id="b" label="Song B" />
+      <div className={cn("grid min-w-0 gap-4", remix ? "grid-cols-1" : "sm:grid-cols-2")}>
+        <SongSlot id="a" label={remix ? "Song" : "Song A"} />
+        {remix ? null : <SongSlot id="b" label="Song B" />}
       </div>
+
+      <label className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border md:p-5">
+        <span className="text-xs font-medium tracking-widest text-muted uppercase">
+          Direction
+        </span>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={2}
+          maxLength={400}
+          placeholder={
+            remix
+              ? "Club remix, heavier kick, open the drop."
+              : job === "both"
+                ? "Late-night mash, then remix the blend."
+                : "Smooth club blend. Keep the kick."
+          }
+          className="min-h-16 w-full resize-none rounded-md border-0 bg-bg px-3 py-2 text-sm text-fg outline-none placeholder:text-subtle"
+        />
+      </label>
 
       <section className="flex min-w-0 flex-col gap-4 rounded-2xl bg-surface p-4 shadow-border md:p-5">
         <Button
@@ -57,11 +139,7 @@ export function MashPanel() {
           disabled={busy || !ready}
         >
           <Shuffle />
-          {status === "planning"
-            ? "Mashing…"
-            : ready
-              ? `Mash ${deckA.name} × ${deckB.name}`
-              : "Load both songs"}
+          {action}
         </Button>
         <p className="text-sm text-muted">{statusText}</p>
         {error ? <p className="text-sm text-rec">{error}</p> : null}
@@ -77,20 +155,20 @@ export function MashPanel() {
         </div>
         <p className="text-xs tabular-nums text-subtle">
           {formatTime(timeA)}
-          {playing ? " · in the mash" : ""}
+          {playing ? (remix ? " · in the remix" : " · in the mash") : ""}
         </p>
       </section>
 
       {recents.length > 0 ? (
         <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Your mashes
+            Your cuts
           </p>
           <ul className="flex flex-col gap-2">
             {recents.slice(0, 8).map((cut) => (
               <li key={cut.id} className="min-w-0">
                 <p className="truncate text-sm text-fg">
-                  {cut.nameA} × {cut.nameB}
+                  {cutTitle(cut.nameA, cut.nameB)}
                 </p>
                 {cut.cue ? (
                   <p className="truncate text-xs text-muted italic">{cut.cue}</p>
@@ -105,7 +183,7 @@ export function MashPanel() {
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
           <Button
             size="play"
-            aria-label={playing ? "Pause mash" : "Play mash"}
+            aria-label={playing ? "Pause" : "Play"}
             disabled={!ready}
             onClick={() => {
               if (playing) stopMix();
@@ -128,7 +206,11 @@ export function MashPanel() {
             <Square className="size-3.5 fill-current" />
           </Button>
           <p className="min-w-0 truncate text-sm text-muted">
-            {ready ? `${deckA.name} × ${deckB.name}` : "Song A × Song B"}
+            {ready
+              ? remix
+                ? `${deckA.name} remix`
+                : `${deckA.name} × ${deckB.name}`
+              : current.title}
           </p>
         </div>
         <div className="dock-safe" />
