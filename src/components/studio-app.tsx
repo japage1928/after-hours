@@ -63,7 +63,6 @@ export function StudioApp() {
             {(
               [
                 ["mash", "Mix"],
-                ["write", "Write"],
               ] as const
             ).map(([id, label]) => (
               <button
