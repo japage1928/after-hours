@@ -1,6 +1,6 @@
-import { detectBpm, waveformPeaks, type BpmGuess } from "@/lib/bpm";
+import { detectBpm, waveformPeaks, type BpmGuess } from "./bpm.ts";
 import type { MixPlan } from "@/lib/dj-api";
-import { renderRemix } from "@/lib/remix-render";
+import { renderRemix } from "./remix-render.ts";
 
 export type DeckId = "a" | "b";
 
@@ -66,6 +66,10 @@ export class DjEngine {
   private raf = 0;
   private mixTimer = 0;
   private remixDuck = 1;
+  private renderController: AbortController | null = null;
+  private renderedBuffer: AudioBuffer | null = null;
+  private renderedPlan: MixPlan | null = null;
+  vocalSemitones = 0;
   private remixSource: AudioBufferSourceNode | null = null;
   private remixPlaying = false;
   private remixOrigin = 0;
@@ -202,6 +206,7 @@ export class DjEngine {
     looping: boolean,
     guess?: BpmGuess,
   ) {
+    this.invalidateRender();
     const d = this.decks[id];
     this.stopDeck(id);
     d.buffer = buffer;
@@ -306,6 +311,8 @@ export class DjEngine {
   }
 
   stopAll() {
+    this.renderController?.abort();
+    this.renderController = null;
     this.clearMixTimer();
     this.stopRemix();
     this.remixDuck = 1;
@@ -338,7 +345,9 @@ export class DjEngine {
     const sourceA = this.decks.a.buffer;
     if (!sourceA) return;
     if (plan.job !== "remix" && !this.decks.b.buffer) return;
-    const buffer = await renderRemix({
+    const controller = new AbortController();
+    this.renderController = controller;
+    const buffer = this.renderedPlan === plan && this.renderedBuffer ? this.renderedBuffer : await renderRemix({
       sourceA,
       sourceB: plan.job === "remix" ? null : this.decks.b.buffer,
       bpmA: this.decks.a.info.bpm,
@@ -346,8 +355,29 @@ export class DjEngine {
       offsetA: this.decks.a.info.offset,
       offsetB: this.decks.b.info.offset,
       plan,
+      signal: controller.signal,
+      vocalSemitones: plan.job === "stems" ? this.vocalSemitones : 0,
     });
+    controller.signal.throwIfAborted();
+    this.renderedBuffer = buffer;
+    this.renderedPlan = plan;
     this.playRemixBuffer(buffer);
+  }
+
+  outputBuffer() { return this.renderedBuffer; }
+
+  invalidateRender() {
+    this.stopAll();
+    this.renderedBuffer = null;
+    this.renderedPlan = null;
+  }
+
+  setTiming(id: DeckId, bpm: number, offset: number) {
+    this.invalidateRender();
+    const info = this.decks[id].info;
+    info.bpm = Math.min(180, Math.max(70, bpm));
+    info.offset = Math.min(Math.max(0, info.duration - 0.1), Math.max(0, offset));
+    this.emit();
   }
 
   private playRemixBuffer(buffer: AudioBuffer) {

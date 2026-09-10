@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { snapClubBpm } from "@/lib/bpm";
 
-export const MixJobSchema = z.enum(["mashup", "remix", "both"]);
+export const MixJobSchema = z.enum(["mashup", "remix", "both", "stems"]);
 export type MixJob = z.infer<typeof MixJobSchema>;
 
 export const MixPlanSchema = z.object({
@@ -43,6 +43,7 @@ export type PlanMixInput = z.infer<typeof PlanMixInputSchema>;
 
 export function fallbackPlan(input: PlanMixInput): MixPlan {
   const job = input.job;
+  if (job === "stems") return { job, targetBpm: input.bpmA, aOffsetSec: 0, bOffsetSec: 0, mixInSec: 0, crossfadeSec: 8, holdSec: 32, dropSec: 8, bassBoost: 0, midCut: 0, air: 0, pump: false, sweepA: false, cue: "Instrumental A with vocal B. Set each original song BPM and cue point before rendering." };
   if (job === "remix") {
     const targetBpm = snapClubBpm(input.bpmA, "remix");
     const bar = (60 / input.bpmA) * 4;
@@ -114,6 +115,7 @@ export const planMix = createServerFn({ method: "POST" })
   .validator((input: unknown) => PlanMixInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; plan: MixPlan } | { ok: false; error: string; plan: MixPlan }> => {
     const local = fallbackPlan(data);
+    if (data.job === "stems") return { ok: true, plan: local };
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: true, plan: local };
 

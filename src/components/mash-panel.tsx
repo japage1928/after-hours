@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Pause, Play, Shuffle, Square, Upload } from "lucide-react";
+import { Play, Shuffle, Square, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Visualizer } from "@/components/visualizer";
@@ -10,11 +10,12 @@ import { useBooth } from "@/lib/dj-store";
 import { cn, formatTime } from "@/lib/utils";
 
 const JOBS: { id: MixJob; label: string; blurb: string; title: string }[] = [
+  { id: "stems", label: "AI mashup", title: "Instrumental A + vocals B", blurb: "Load two ordinary songs. Demucs separates them automatically, then Mashup Pro combines instrumental A with vocals B." },
   {
     id: "mashup",
-    label: "Mashup",
+    label: "DJ blend",
     title: "Song A × Song B",
-    blurb: "Two tracks, beat-matched into one cut.",
+    blurb: "Crossfade two full songs. This mode does not isolate vocals.",
   },
   {
     id: "remix",
@@ -54,23 +55,31 @@ export function MashPanel() {
   const deckB = useBooth((s) => s.deckB);
   const timeA = useBooth((s) => s.timeA);
   const user = useCurrentUser();
-  const busy = status === "loading" || status === "planning";
+  const hasOutput = useBooth((s) => s.hasOutput);
+  const download = useBooth((s) => s.download);
+  const vocalSemitones = useBooth((s) => s.vocalSemitones);
+  const setVocalSemitones = useBooth((s) => s.setVocalSemitones);
+  const busy = status === "loading" || status === "planning" || status === "rendering";
   const remix = job === "remix";
   const ready = remix ? deckA.hasTrack : deckA.hasTrack && deckB.hasTrack;
   const current = JOBS.find((j) => j.id === job) ?? JOBS[0];
   const action =
-    status === "planning"
+    (status === "planning" || status === "rendering")
       ? remix
         ? "Producing remix…"
         : job === "both"
           ? "Producing mash + remix…"
-          : "Producing mashup…"
+          : job === "stems"
+            ? "Separating + mashing…"
+            : "Producing mashup…"
       : ready
         ? remix
           ? `Remix ${deckA.name}`
           : job === "both"
             ? `Mash + remix ${deckA.name} × ${deckB.name}`
-            : `Mash ${deckA.name} × ${deckB.name}`
+            : job === "stems"
+              ? `AI mash ${deckA.name} × ${deckB.name}`
+              : `Mash ${deckA.name} × ${deckB.name}`
         : remix
           ? "Load a song"
           : "Load both songs";
@@ -94,6 +103,7 @@ export function MashPanel() {
             <button
               key={item.id}
               type="button"
+              disabled={busy}
               onClick={() => setJob(item.id)}
               className={cn(
                 "h-11 flex-1 rounded-sm px-2 text-sm font-medium transition-colors duration-150",
@@ -111,11 +121,18 @@ export function MashPanel() {
         {remix ? null : <SongSlot id="b" label="Song B" />}
       </div>
 
+      {job === "stems" ? <label className="text-sm text-muted">Vocal pitch shift (semitones)
+        <input type="number" min={-12} max={12} step={1} value={vocalSemitones} disabled={busy}
+          onChange={(e) => setVocalSemitones(Math.max(-12, Math.min(12, Number(e.target.value) || 0)))}
+          className="ml-3 w-20 rounded bg-surface p-2" />
+        <p>Demucs will isolate the parts automatically. Keep the original-song BPM values below; adjust vocal pitch by ear until automatic key matching is added.</p>
+      </label> : null}
       <label className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border md:p-5">
         <span className="text-xs font-medium tracking-widest text-muted uppercase">
           Direction
         </span>
         <textarea
+          disabled={busy || job === "stems"}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={2}
@@ -141,7 +158,8 @@ export function MashPanel() {
           <Shuffle />
           {action}
         </Button>
-        <p className="text-sm text-muted">{statusText}</p>
+        <p className="text-sm text-muted" role="status">{statusText}</p>
+        {hasOutput ? <Button onClick={download} variant="secondary">Download WAV</Button> : null}
         {error ? <p className="text-sm text-rec">{error}</p> : null}
         {cue ? (
           <p className="font-display text-xl text-fg/90 italic">{cue}</p>
@@ -162,7 +180,7 @@ export function MashPanel() {
       {recents.length > 0 ? (
         <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Your cuts
+            Recent mix notes (audio is not saved)
           </p>
           <ul className="flex flex-col gap-2">
             {recents.slice(0, 8).map((cut) => (
@@ -183,15 +201,15 @@ export function MashPanel() {
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
           <Button
             size="play"
-            aria-label={playing ? "Pause" : "Play"}
-            disabled={!ready}
+            aria-label={playing ? "Stop playback" : "Play"}
+            disabled={busy || !ready}
             onClick={() => {
               if (playing) stopMix();
               else void playMash();
             }}
           >
             {playing ? (
-              <Pause className="size-5 fill-current" />
+              <Square className="size-5 fill-current" />
             ) : (
               <Play className="ml-0.5 size-5 fill-current" />
             )}
@@ -222,11 +240,13 @@ export function MashPanel() {
 function SongSlot({ id, label }: { id: DeckId; label: string }) {
   const deck = useBooth((s) => (id === "a" ? s.deckA : s.deckB));
   const loadFile = useBooth((s) => s.loadFile);
+  const setTiming = useBooth((s) => s.setTiming);
+  const busy = useBooth((s) => ["loading", "planning", "rendering"].includes(s.status));
   const inputRef = useRef<HTMLInputElement>(null);
 
   const onFiles = (files: FileList | null) => {
     const file = files?.[0];
-    if (file) void loadFile(id, file);
+    if (file && !busy) void loadFile(id, file);
   };
 
   return (
@@ -271,7 +291,13 @@ function SongSlot({ id, label }: { id: DeckId; label: string }) {
           e.target.value = "";
         }}
       />
-      <Button variant="secondary" onClick={() => inputRef.current?.click()}>
+      {deck.hasTrack ? <div className="flex gap-3 text-xs text-muted">
+        <label>Original BPM<input aria-label={`${label} BPM`} type="number" min={70} max={180} step={0.5} value={deck.bpm} disabled={busy}
+          onChange={(e) => setTiming(id, Number(e.target.value) || 120, deck.offset)} className="mt-1 w-full rounded bg-bg p-2" /></label>
+        <label>Cue seconds<input aria-label={`${label} cue seconds`} type="number" min={0} max={deck.duration - 0.1} step={0.05} value={deck.offset} disabled={busy}
+          onChange={(e) => setTiming(id, deck.bpm, Number(e.target.value) || 0)} className="mt-1 w-full rounded bg-bg p-2" /></label>
+      </div> : null}
+      <Button disabled={busy} variant="secondary" onClick={() => inputRef.current?.click()}>
         <Upload />
         Load {label}
       </Button>
