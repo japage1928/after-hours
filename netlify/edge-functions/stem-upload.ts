@@ -12,9 +12,6 @@ export default async function stemUpload(request: Request) {
   }
 
   try {
-    // Rebuild the multipart payload inside the Edge Function instead of forwarding
-    // the browser's request stream verbatim. This avoids upstream failures caused by
-    // chunked multipart bodies/boundaries being proxied through the edge runtime.
     const incoming = await request.formData();
     const content = incoming.get("content");
     if (!(content instanceof File)) {
@@ -30,7 +27,7 @@ export default async function stemUpload(request: Request) {
 
     const upstream = await fetch(REPLICATE_FILES_URL, {
       method: "POST",
-      headers: { Authorization: `Token ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
 
