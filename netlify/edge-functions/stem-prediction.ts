@@ -1,6 +1,15 @@
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 const DEMUCS_VERSION = "25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953";
 
+function normalizeToken(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .replace(/^Token\s+/i, "")
+    .replace(/^['\"]|['\"]$/g, "")
+    .trim();
+}
+
 function authHeaders(token: string) {
   return {
     Authorization: `Bearer ${token}`,
@@ -9,7 +18,8 @@ function authHeaders(token: string) {
 }
 
 export default async function stemPrediction(request: Request) {
-  const token = Netlify.env.get("REPLICATE_API_TOKEN");
+  const rawToken = Netlify.env.get("REPLICATE_API_TOKEN") ?? "";
+  const token = normalizeToken(rawToken);
   if (!token) return Response.json({ error: "Stem separation is not configured." }, { status: 503 });
 
   try {
