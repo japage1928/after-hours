@@ -228,7 +228,8 @@ export const useBooth = create<BoothState>((set, get) => ({
       return;
     }
     studioEngine.stop();
-    const verb = job === "remix" ? "Remixing" : job === "both" ? "Mashing and remixing" : "Mashing";
+    const verb =
+      job === "remix" ? "Building remix" : job === "both" ? "Building mash + remix" : "Mashing";
     set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
     const input = {
       job,

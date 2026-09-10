@@ -37,10 +37,9 @@ export type PlanMixInput = z.infer<typeof PlanMixInputSchema>;
 export function fallbackPlan(input: PlanMixInput): MixPlan {
   const job = input.job;
   if (job === "remix") {
-    const faster = input.bpmA < 128;
-    const targetBpm = Math.round(faster ? Math.min(136, input.bpmA + 6) : Math.max(96, input.bpmA - 8));
+    const targetBpm =
+      input.bpmA < 118 ? 126 : input.bpmA < 130 ? 140 : 124;
     const bar = (60 / input.bpmA) * 4;
-    const dropSec = Math.min(input.durationA * 0.28, bar * 8);
     return {
       job,
       targetBpm,
@@ -48,14 +47,14 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
       bOffsetSec: 0,
       mixInSec: 0,
       crossfadeSec: 4,
-      holdSec: Math.min(24, input.durationA * 0.5),
-      dropSec: Math.max(6, dropSec),
-      bassBoost: 0.55,
-      midCut: -0.25,
-      air: 0.3,
+      holdSec: 24,
+      dropSec: bar * 4,
+      bassBoost: 0.6,
+      midCut: -0.3,
+      air: 0.35,
       pump: true,
       sweepA: true,
-      cue: `Remix ${input.nameA} at ${targetBpm} BPM. Dark intro, then open the drop.`,
+      cue: `Club remix of ${input.nameA} at ${targetBpm} BPM — new kick, chopped vocal, drop at bar 5.`,
     };
   }
   const targetBpm = Math.round((input.bpmA + (input.bpmB || input.bpmA)) / 2);
@@ -79,7 +78,7 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
     pump: remix,
     sweepA: true,
     cue: remix
-      ? `Remix mash ${input.nameA} × ${input.nameB} at ${targetBpm}. Restyle A, then pull B across the drop.`
+      ? `Remix mash ${input.nameA} × ${input.nameB} at ${targetBpm} — new drums, A chopped, B in at the drop.`
       : `Beat-match to ${targetBpm}, ride A, then bring B in over four bars.`,
   };
 }
@@ -95,7 +94,7 @@ function extractJson(text: string): unknown {
 
 function systemFor(job: MixJob): string {
   if (job === "remix") {
-    return "You are a remix engineer working one track. Plan a new tempo, a dark intro, a drop, and EQ. Never request copyrighted audio, never clone artist voices. JSON only.";
+    return "You are a remix engineer. One track. Plan a club remix with a NEW drum bed, chopped vocal, and a drop — not a playback of the original. New tempo must jump at least 8 BPM. Never clone artist voices. JSON only.";
   }
   if (job === "both") {
     return "You are a DJ remixing a two-song mashup. Beat-match AND restyle: new tempo, EQ, a drop where B enters. Never clone artist voices. JSON only.";

@@ -1,5 +1,6 @@
 import { detectBpm, waveformPeaks, type BpmGuess } from "@/lib/bpm";
 import type { MixPlan } from "@/lib/dj-api";
+import { renderRemix } from "@/lib/remix-render";
 
 export type DeckId = "a" | "b";
 
@@ -65,6 +66,10 @@ export class DjEngine {
   private raf = 0;
   private mixTimer = 0;
   private remixDuck = 1;
+  private remixSource: AudioBufferSourceNode | null = null;
+  private remixPlaying = false;
+  private remixOrigin = 0;
+  private remixDuration = 0;
   private decks: Record<DeckId, DeckNodes>;
 
   constructor() {
@@ -99,7 +104,7 @@ export class DjEngine {
   }
 
   isPlaying(): boolean {
-    return this.decks.a.playing || this.decks.b.playing;
+    return this.remixPlaying || this.decks.a.playing || this.decks.b.playing;
   }
 
   isDeckPlaying(id: DeckId): boolean {
@@ -115,6 +120,9 @@ export class DjEngine {
   }
 
   deckTime(id: DeckId): number {
+    if (this.remixPlaying && this.ctx) {
+      return Math.min(this.remixDuration, Math.max(0, this.ctx.currentTime - this.remixOrigin));
+    }
     const d = this.decks[id];
     if (!this.ctx || !d.playing) return d.startOffset;
     const elapsed = (this.ctx.currentTime - d.originTime) * d.rate;
@@ -295,6 +303,7 @@ export class DjEngine {
 
   stopAll() {
     this.clearMixTimer();
+    this.stopRemix();
     this.remixDuck = 1;
     this.stopDeck("a");
     this.stopDeck("b");
@@ -322,26 +331,67 @@ export class DjEngine {
     await this.ensure();
     if (!this.ctx) return;
     this.stopAll();
-    this.remixDuck = 1;
-    this.applyRemixTone(plan);
-    this.setTargetBpm(plan.targetBpm);
-    if (plan.job === "remix") {
+    if (plan.job === "mashup") {
+      this.remixDuck = 1;
+      this.applyRemixTone(plan);
+      this.setTargetBpm(plan.targetBpm);
       this.setXfader(-1);
-      this.setFilter("a", plan.sweepA ? 0.55 : 0);
+      this.setFilter("a", 0);
       this.setFilter("b", 0);
       const now = this.ctx.currentTime + 0.08;
       await this.playDeck("a", plan.aOffsetSec, now);
-      this.animateJob(plan, true);
+      await this.playDeck("b", plan.bOffsetSec, now + plan.mixInSec);
+      this.animateJob(plan, false);
       return;
     }
-    this.setXfader(-1);
-    this.setFilter("a", 0);
-    this.setFilter("b", 0);
-    const now = this.ctx.currentTime + 0.08;
-    await this.playDeck("a", plan.aOffsetSec, now);
-    const bWhen = now + plan.mixInSec;
-    await this.playDeck("b", plan.bOffsetSec, bWhen);
-    this.animateJob(plan, false);
+    const sourceA = this.decks.a.buffer;
+    if (!sourceA) return;
+    const buffer = await renderRemix({
+      sourceA,
+      sourceB: plan.job === "both" ? this.decks.b.buffer : null,
+      bpmA: this.decks.a.info.bpm,
+      bpmB: this.decks.b.info.bpm,
+      offsetA: this.decks.a.info.offset,
+      offsetB: this.decks.b.info.offset,
+      plan,
+    });
+    this.playRemixBuffer(buffer);
+  }
+
+  private playRemixBuffer(buffer: AudioBuffer) {
+    if (!this.ctx || !this.master) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.master);
+    const now = this.ctx.currentTime + 0.05;
+    try {
+      src.start(now);
+    } catch {
+      return;
+    }
+    src.onended = () => {
+      if (this.remixSource === src) {
+        this.remixPlaying = false;
+        this.remixSource = null;
+        this.emit();
+      }
+    };
+    this.remixSource = src;
+    this.remixPlaying = true;
+    this.remixOrigin = now;
+    this.remixDuration = buffer.duration;
+    this.emit();
+  }
+
+  private stopRemix() {
+    try {
+      this.remixSource?.stop();
+    } catch {
+      /* already stopped */
+    }
+    this.remixSource = null;
+    this.remixPlaying = false;
+    this.remixDuration = 0;
   }
 
   private applyRemixTone(plan: MixPlan) {
@@ -479,7 +529,7 @@ export class DjEngine {
         b: this.deckTime("b"),
         xfader: this.xfader,
         playing: this.isPlaying(),
-        aPlaying: this.decks.a.playing,
+        aPlaying: this.decks.a.playing || this.remixPlaying,
         bPlaying: this.decks.b.playing,
       }),
     );

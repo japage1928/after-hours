@@ -61,9 +61,9 @@ export function MashPanel() {
   const action =
     status === "planning"
       ? remix
-        ? "Remixing…"
+        ? "Building remix…"
         : job === "both"
-          ? "Mashing + remixing…"
+          ? "Building mash + remix…"
           : "Mashing…"
       : ready
         ? remix
