@@ -7,6 +7,13 @@ export type N8nJob<T = unknown> = {
   error?: string | null;
 };
 
+export type N8nMashupStart = {
+  status: N8nJobStatus;
+  jobs: { A: string; B: string };
+  mixPlan?: Record<string, unknown> | null;
+  error?: string | null;
+};
+
 export class N8nNotConfiguredError extends Error {
   constructor() {
     super("n8n backend is not configured.");
@@ -58,6 +65,47 @@ export async function startN8nStemJob(file: File, signal?: AbortSignal): Promise
   ensureConfigured(response);
   const data = await parseJson<N8nJob<Record<string, string>> & { error?: string }>(response);
   if (!response.ok || !data?.jobId) throw new Error(data?.error || `n8n stem job failed (${response.status}).`);
+  return data;
+}
+
+export async function startN8nMashupJobs(
+  songA: File,
+  songB: File,
+  metadata: {
+    bpmA?: number;
+    bpmB?: number;
+    keyA?: string;
+    keyB?: string;
+    durationA?: number;
+    durationB?: number;
+    energyA?: string;
+    energyB?: string;
+    phraseBoundariesA?: string;
+    phraseBoundariesB?: string;
+    peakASec?: number;
+    peakBSec?: number;
+    dropBarA?: number;
+    dropBarB?: number;
+    prompt?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<N8nMashupStart> {
+  const form = new FormData();
+  form.append("audioA", songA, songA.name);
+  form.append("audioB", songB, songB.name);
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value !== undefined && value !== null && value !== "") form.append(key, String(value));
+  }
+  const response = await fetch("/api/orchestrate/mashup", {
+    method: "POST",
+    body: form,
+    signal,
+  });
+  ensureConfigured(response);
+  const data = await parseJson<N8nMashupStart>(response);
+  if (!response.ok || !data?.jobs?.A || !data?.jobs?.B) {
+    throw new Error(data?.error || `n8n mashup job failed (${response.status}).`);
+  }
   return data;
 }
 
