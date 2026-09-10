@@ -1,11 +1,7 @@
 import type { Song } from "@/lib/types";
 import { genreById } from "@/lib/genres";
 import { vocalistById } from "@/lib/vocalists";
-import {
-  N8nNotConfiguredError,
-  startN8nSongJob,
-  waitForN8nJob,
-} from "@/lib/n8n-orchestrator";
+import { startN8nSongJob, waitForN8nJob } from "@/lib/n8n-orchestrator";
 
 type Prediction = {
   id: string;
@@ -120,11 +116,16 @@ async function generateLegacy(song: Song, signal?: AbortSignal): Promise<AudioBu
   return decodeRemoteAudio(url, signal);
 }
 
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export async function generateFullSong(song: Song, signal?: AbortSignal): Promise<AudioBuffer> {
   try {
     return await generateThroughN8n(song, signal);
   } catch (error) {
-    if (!(error instanceof N8nNotConfiguredError)) throw error;
+    if (signal?.aborted || isAbort(error)) throw error;
+    console.warn("Mashup Pro n8n song generation failed; using temporary legacy fallback.", error);
     return generateLegacy(song, signal);
   }
 }
