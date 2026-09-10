@@ -137,26 +137,24 @@ JSON shape:
 
     const run = async () => {
       if (hasN8nBackend()) {
-        const result = await postN8nJson<Record<string, unknown> | { song?: Record<string, unknown> }>(
-          "song-plan",
-          data,
-          120000,
-        );
-        const payload = "song" in result && result.song ? result.song : result;
-        return JSON.stringify(payload);
+        try {
+          const result = await postN8nJson<Record<string, unknown> | { song?: Record<string, unknown> }>(
+            "song-plan",
+            data,
+            120000,
+          );
+          const payload = "song" in result && result.song ? result.song : result;
+          return JSON.stringify(payload);
+        } catch (error) {
+          console.warn("Mashup Pro n8n song-plan failed; using temporary direct fallback.", error);
+        }
       }
       return runDirect();
     };
 
     try {
-      let text = "";
-      try {
-        text = await run();
-      } catch (err) {
-        if (hasN8nBackend()) throw err;
-        text = await run();
-        if (!text) throw err;
-      }
+      const text = await run();
+      if (!text) throw new Error("The writer returned no song JSON.");
       const parsed = extractJson(text);
       const raw = parsed as Record<string, unknown>;
       const sectionsIn = Array.isArray(raw.sections) ? raw.sections : [];
