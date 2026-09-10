@@ -12,18 +12,44 @@ export default async function stemUpload(request: Request) {
   }
 
   try {
-    // Stream the browser's multipart body straight to Replicate. Do not buffer large songs in Netlify.
+    // Rebuild the multipart payload inside the Edge Function instead of forwarding
+    // the browser's request stream verbatim. This avoids upstream failures caused by
+    // chunked multipart bodies/boundaries being proxied through the edge runtime.
+    const incoming = await request.formData();
+    const content = incoming.get("content");
+    if (!(content instanceof File)) {
+      return Response.json({ error: "No audio file was received." }, { status: 400 });
+    }
+    if (content.size > 20 * 1024 * 1024) {
+      return Response.json({ error: "Keep each track under 20 MB." }, { status: 413 });
+    }
+
+    const form = new FormData();
+    form.append("content", content, content.name || "track-audio");
+    form.append("metadata", JSON.stringify({ source: "mashup-pro" }));
+
     const upstream = await fetch(REPLICATE_FILES_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Token ${token}`,
-        "Content-Type": contentType,
-      },
-      body: request.body,
+      headers: { Authorization: `Token ${token}` },
+      body: form,
     });
 
-    const body = await upstream.text();
-    return new Response(body, {
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      let detail = text;
+      try {
+        const parsed = JSON.parse(text) as { detail?: string; error?: string; message?: string };
+        detail = parsed.detail || parsed.error || parsed.message || text;
+      } catch {
+        /* keep raw text */
+      }
+      return Response.json(
+        { error: `Replicate upload failed (${upstream.status})${detail ? `: ${String(detail).slice(0, 300)}` : ""}` },
+        { status: upstream.status },
+      );
+    }
+
+    return new Response(text, {
       status: upstream.status,
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
