@@ -1,3 +1,4 @@
+import { requireAccount } from "./_shared/require-account.ts";
 const REPLICATE_FILES_URL = "https://api.replicate.com/v1/files";
 
 function normalizeToken(raw: string): string {
@@ -10,6 +11,8 @@ function normalizeToken(raw: string): string {
 }
 
 export default async function stemUpload(request: Request) {
+  const denied = await requireAccount(request);
+  if (denied) return denied;
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const rawToken = Netlify.env.get("REPLICATE_API_TOKEN") ?? "";

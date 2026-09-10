@@ -43,5 +43,7 @@ export const authMiddleware = createMiddleware({ type: "function" })
     // Reject scripted cross-site/sibling requests before touching per-user data.
     assertSameSiteRequest();
     const userId = await requireUserId(context.bearerToken);
-    return next({ context: { userId } });
+    const { requireActiveAccount } = await import("./account-access.server");
+    const account = await requireActiveAccount(userId);
+    return next({ context: { userId, account } });
   });

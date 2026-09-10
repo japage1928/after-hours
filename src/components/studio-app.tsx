@@ -30,6 +30,11 @@ export function StudioApp() {
     hydrate();
   }, [hydrate, user?.id]);
 
+  useEffect(() => () => {
+    useBooth.getState().stopMix();
+    useStudio.getState().stop();
+  }, []);
+
   const go = (next: Room) => {
     if (next === room) return;
     if (next === "mash") {
@@ -47,7 +52,7 @@ export function StudioApp() {
       <header className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-5 pb-2 md:px-8 md:pt-8">
         <div className="min-w-0">
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Late-night studio
+            Mashup Pro
           </p>
           <p className="font-display text-3xl leading-none tracking-tight text-fg md:text-4xl">
             Mashup Pro

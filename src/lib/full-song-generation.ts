@@ -95,7 +95,7 @@ async function generateLegacy(song: Song, signal?: AbortSignal): Promise<AudioBu
     }),
     signal,
   });
-  let prediction = (await response.json().catch(() => null)) as (Prediction & { error?: string }) | null;
+  let prediction = (await response.json().catch(() => null)) as Prediction | null;
   if (!response.ok || !prediction?.id) throw new Error(prediction?.error || "Could not start full-song generation.");
 
   const deadline = Date.now() + 15 * 60_000;
