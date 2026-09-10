@@ -16,7 +16,7 @@ export default async function stemUpload(request: Request) {
     const upstream = await fetch(REPLICATE_FILES_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Token ${token}`,
         "Content-Type": contentType,
       },
       body: request.body,
