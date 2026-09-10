@@ -5,6 +5,7 @@ import { fallbackPlan, planMix, type MixJob, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
 import { listMashCuts, saveMashCut, type MashCut } from "@/lib/library-api";
+import { makeAutomaticMashupStems, makeAutomaticRemixSource } from "@/lib/stem-separation";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -55,11 +56,15 @@ type BoothState = {
 
 let tickBound = false;
 let revision = 0;
+let separationController: AbortController | null = null;
+const sourceFiles: Partial<Record<DeckId, File>> = {};
 
-function snapshot(): Pick<
-  BoothState,
-  "xfader" | "playing" | "playingA" | "playingB" | "timeA" | "timeB" | "deckA" | "deckB"
-> {
+function cancelSeparation() {
+  separationController?.abort();
+  separationController = null;
+}
+
+function snapshot(): Pick<BoothState, "xfader" | "playing" | "playingA" | "playingB" | "timeA" | "timeB" | "deckA" | "deckB"> {
   return {
     xfader: djEngine.xfaderValue(),
     playing: djEngine.isPlaying(),
@@ -77,12 +82,14 @@ export const useBooth = create<BoothState>((set, get) => ({
   vocalSemitones: 0,
   setVocalSemitones: (value) => {
     revision++;
+    cancelSeparation();
     djEngine.invalidateRender();
     djEngine.vocalSemitones = value;
     set({ vocalSemitones: value, plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
   },
   setTiming: (id, bpm, offset) => {
     revision++;
+    cancelSeparation();
     djEngine.setTiming(id, bpm, offset);
     set({ plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
   },
@@ -120,6 +127,7 @@ export const useBooth = create<BoothState>((set, get) => ({
 
   setJob: (job) => {
     revision++;
+    cancelSeparation();
     djEngine.invalidateRender();
     const remix = job === "remix";
     set({
@@ -131,29 +139,24 @@ export const useBooth = create<BoothState>((set, get) => ({
       cue: null,
       status: "idle",
       statusText: remix
-        ? "Load one song to remix."
+        ? "Load one song. Demucs will separate it into stems before remixing."
         : job === "both"
           ? "Load two songs. We mash them and remix the blend."
-          : "Load song A and song B.",
+          : job === "stems"
+            ? "Load two ordinary songs. Demucs will extract instrumental A and vocals B automatically."
+            : "Load song A and song B.",
     });
   },
 
   setPrompt: (prompt) => {
     revision++;
+    cancelSeparation();
     djEngine.invalidateRender();
     set({ prompt, plan: null, cue: null, hasOutput: false, status: "idle", ...snapshot() });
   },
 
-  setXfader: (v) => {
-    djEngine.setXfader(v);
-    set({ xfader: v });
-  },
-
-  setVolume: (id, v) => {
-    djEngine.setVolume(id, v);
-    set(id === "a" ? { volA: v } : { volB: v });
-  },
-
+  setXfader: (v) => { djEngine.setXfader(v); set({ xfader: v }); },
+  setVolume: (id, v) => { djEngine.setVolume(id, v); set(id === "a" ? { volA: v } : { volB: v }); },
   setEq: (id, band, v) => {
     djEngine.setEq(id, band, v);
     if (id === "a") set((s) => ({ eqA: { ...s.eqA, [band]: v } }));
@@ -163,63 +166,30 @@ export const useBooth = create<BoothState>((set, get) => ({
   hydrate: async () => {
     if (!tickBound) {
       tickBound = true;
-      djEngine.onTick((t) => {
-        set({
-          timeA: t.a,
-          timeB: t.b,
-          xfader: t.xfader,
-          playing: t.playing,
-          playingA: t.aPlaying,
-          playingB: t.bPlaying,
-        });
-      });
+      djEngine.onTick((t) => set({ timeA: t.a, timeB: t.b, xfader: t.xfader, playing: t.playing, playingA: t.aPlaying, playingB: t.bPlaying }));
     }
     if (get().ready) {
-      try {
-        const recents = await listMashCuts();
-        set({ recents });
-      } catch {
-        set({ recents: [] });
-      }
+      try { set({ recents: await listMashCuts() }); } catch { set({ recents: [] }); }
       return;
     }
     studioEngine.stop();
-    set({
-      ready: true,
-      status: "idle",
-      statusText: "Load a song, then pick mashup, remix, or both.",
-      ...snapshot(),
-    });
-    try {
-      const recents = await listMashCuts();
-      set({ recents });
-    } catch {
-      set({ recents: [] });
-    }
+    set({ ready: true, status: "idle", statusText: "Load a song, then pick mashup, remix, or both.", ...snapshot() });
+    try { set({ recents: await listMashCuts() }); } catch { set({ recents: [] }); }
   },
 
   loadFile: async (id, file) => {
     if (["loading", "planning", "rendering"].includes(get().status)) return;
     if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
-      set({ status: "error", error: "That file is not audio.", statusText: "Need an audio file." });
-      return;
+      set({ status: "error", error: "That file is not audio.", statusText: "Need an audio file." }); return;
     }
     if (file.size > MAX_BYTES) {
-      set({
-        status: "error",
-        error: "Keep each track under 20 MB.",
-        statusText: "File too heavy.",
-      });
-      return;
+      set({ status: "error", error: "Keep each track under 20 MB.", statusText: "File too heavy." }); return;
     }
     const currentRevision = ++revision;
+    cancelSeparation();
+    sourceFiles[id] = file;
     djEngine.invalidateRender();
-    set({
-      plan: null, cue: null, hasOutput: false,
-      status: "loading",
-      statusText: `Reading ${file.name}`,
-      error: null,
-    });
+    set({ plan: null, cue: null, hasOutput: false, status: "loading", statusText: `Reading ${file.name}`, error: null });
     try {
       studioEngine.stop();
       const buffer = await djEngine.decodeFile(file);
@@ -227,119 +197,97 @@ export const useBooth = create<BoothState>((set, get) => ({
       if (buffer.duration < 2 || buffer.duration > 600) throw new Error("Choose audio between 2 seconds and 10 minutes.");
       const guess = detectBpm(buffer);
       djEngine.loadUpload(id, buffer, file.name, guess);
-      set({
-        status: "idle",
-        statusText: `${file.name.replace(/\.[^.]+$/, "")} · ${guess.bpm} BPM`,
-        ...snapshot(),
-      });
+      set({ status: "idle", statusText: `${file.name.replace(/\.[^.]+$/, "")} · ${guess.bpm} BPM`, ...snapshot() });
     } catch (err) {
       if (currentRevision !== revision) return;
-      set({
-        status: "error",
-        error: err instanceof Error ? err.message : "Could not decode that track.",
-        statusText: "Could not read the track.",
-      });
+      set({ status: "error", error: err instanceof Error ? err.message : "Could not decode that track.", statusText: "Could not read the track." });
     }
   },
 
-  playDeck: async (id) => {
-    studioEngine.stop();
-    await djEngine.playDeck(id);
-    set(snapshot());
-  },
-
-  pauseDeck: (id) => {
-    djEngine.pauseDeck(id);
-    set(snapshot());
-  },
-
-  seekDeck: (id, seconds) => {
-    djEngine.seekDeck(id, seconds);
-    set(snapshot());
-  },
-
-  syncB: () => {
-    djEngine.syncToA();
-    set({ statusText: `B locked to ${djEngine.deck("a").bpm} BPM`, ...snapshot() });
-  },
+  playDeck: async (id) => { studioEngine.stop(); await djEngine.playDeck(id); set(snapshot()); },
+  pauseDeck: (id) => { djEngine.pauseDeck(id); set(snapshot()); },
+  seekDeck: (id, seconds) => { djEngine.seekDeck(id, seconds); set(snapshot()); },
+  syncB: () => { djEngine.syncToA(); set({ statusText: `B locked to ${djEngine.deck("a").bpm} BPM`, ...snapshot() }); },
 
   dropMix: async () => {
     if (["loading", "planning", "rendering"].includes(get().status)) return;
     const currentRevision = ++revision;
-    const { deckA, deckB, prompt, job } = get();
-    if (!deckA.hasTrack) {
-      set({ status: "error", error: "Load a song first.", statusText: "Need a track." });
-      return;
-    }
-    if (job !== "remix" && !deckB.hasTrack) {
-      set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." });
-      return;
-    }
+    const { prompt, job } = get();
+    let deckA = get().deckA;
+    let deckB = get().deckB;
+    if (!deckA.hasTrack) { set({ status: "error", error: "Load a song first.", statusText: "Need a track." }); return; }
+    if (job !== "remix" && !deckB.hasTrack) { set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." }); return; }
     studioEngine.stop();
     djEngine.invalidateRender();
     set({ hasOutput: false });
     try {
-    const verb =
-      job === "remix" ? "Producing remix" : job === "both" ? "Producing mash + remix" : "Producing mashup";
-    set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
-    const bufA = djEngine.rawBuffer("a");
-    const bufB = job === "remix" ? null : djEngine.rawBuffer("b");
-    const anA = bufA ? analyzeTrack(bufA, deckA.bpm, deckA.offset) : null;
-    const anB = bufB ? analyzeTrack(bufB, deckB.bpm, deckB.offset) : null;
-    const compact = (xs: number[]) =>
-      xs
-        .slice(0, 24)
-        .map((x) => x.toFixed(2))
-        .join(",");
-    const input = {
-      job,
-      nameA: deckA.name.slice(0, 80),
-      nameB: job === "remix" ? "" : deckB.name.slice(0, 80),
-      bpmA: deckA.bpm,
-      bpmB: job === "remix" ? deckA.bpm : deckB.bpm,
-      durationA: deckA.duration,
-      durationB: job === "remix" ? 0 : deckB.duration,
-      prompt: prompt.trim(),
-      energyA: anA ? compact(anA.energy) : "",
-      energyB: anB ? compact(anB.energy) : "",
-      peakASec: anA?.peakSec ?? 0,
-      peakBSec: anB?.peakSec ?? 0,
-      dropBarA: anA?.dropBar ?? 16,
-      dropBarB: anB?.dropBar ?? 16,
-    };
-    let plan: MixPlan = fallbackPlan(input);
-    try {
-      const res = await planMix({ data: input });
-      if (res.ok) plan = res.plan;
-    } catch {
-      /* local plan */
-    }
-    if (currentRevision !== revision) return;
-    set({
-      plan,
-      cue: plan.cue,
-      status: "rendering",
-      statusText: "Rendering audio…",
-    });
-    await djEngine.runPlan(plan);
-    if (currentRevision !== revision) return;
-    set({ ...snapshot(), hasOutput: true, status: "mixing", statusText: "Ready. Play or download your WAV." });
-    void saveMashCut({
-      data: {
-        nameA: deckA.name,
-        nameB: job === "remix" ? "remix" : job === "both" ? `${deckB.name} · remix mash` : deckB.name,
+      if (job === "remix") {
+        const song = sourceFiles.a;
+        if (!song) throw new Error("Reload the original song before remixing.");
+        separationController = new AbortController();
+        set({ status: "planning", statusText: "Separating vocals, drums, bass and music with Demucs…", error: null, cue: null });
+        const originalName = deckA.name;
+        const originalBpm = deckA.bpm;
+        const stemEdit = await makeAutomaticRemixSource(song, originalBpm, deckA.offset, separationController.signal);
+        separationController = null;
+        if (currentRevision !== revision) return;
+        djEngine.setBuffer("a", stemEdit, `${originalName} · stem remix`, originalBpm, false);
+        deckA = { ...djEngine.deck("a") };
+        set({ ...snapshot(), status: "planning", statusText: "Stems separated. Building a clean DJ remix…" });
+      } else if (job === "stems") {
+        const songA = sourceFiles.a;
+        const songB = sourceFiles.b;
+        if (!songA || !songB) throw new Error("Reload both original songs before automatic stem separation.");
+        separationController = new AbortController();
+        set({ status: "planning", statusText: "Separating vocals and instrumentals with Demucs…", error: null, cue: null });
+        const { instrumentalA, vocalsB } = await makeAutomaticMashupStems(songA, songB, separationController.signal);
+        separationController = null;
+        if (currentRevision !== revision) return;
+        const originalBpmA = deckA.bpm;
+        const originalBpmB = deckB.bpm;
+        djEngine.setBuffer("a", instrumentalA, `${deckA.name} · instrumental`, originalBpmA, false);
+        djEngine.setBuffer("b", vocalsB, `${deckB.name} · vocals`, originalBpmB, false);
+        deckA = { ...djEngine.deck("a") };
+        deckB = { ...djEngine.deck("b") };
+        set({ ...snapshot(), status: "planning", statusText: "Stems ready. Building the mashup…" });
+      }
+
+      const verb = job === "remix" ? "Producing stem remix" : job === "both" ? "Producing mash + remix" : job === "stems" ? "Producing vocal mashup" : "Producing mashup";
+      set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
+      const bufA = djEngine.rawBuffer("a");
+      const bufB = job === "remix" ? null : djEngine.rawBuffer("b");
+      const anA = bufA ? analyzeTrack(bufA, deckA.bpm, deckA.offset) : null;
+      const anB = bufB ? analyzeTrack(bufB, deckB.bpm, deckB.offset) : null;
+      const compact = (xs: number[]) => xs.slice(0, 24).map((x) => x.toFixed(2)).join(",");
+      const input = {
+        job,
+        nameA: deckA.name.slice(0, 80),
+        nameB: job === "remix" ? "" : deckB.name.slice(0, 80),
         bpmA: deckA.bpm,
-        bpmB: job === "remix" ? plan.targetBpm : deckB.bpm,
-        cue: plan.cue,
-      },
-    })
-      .then(() => listMashCuts())
-      .then((recents) => set({ recents }))
-      .catch(() => {
-        /* signed out */
-      });
-    } catch (err) {
+        bpmB: job === "remix" ? deckA.bpm : deckB.bpm,
+        durationA: deckA.duration,
+        durationB: job === "remix" ? 0 : deckB.duration,
+        prompt: prompt.trim(),
+        energyA: anA ? compact(anA.energy) : "",
+        energyB: anB ? compact(anB.energy) : "",
+        peakASec: anA?.peakSec ?? 0,
+        peakBSec: anB?.peakSec ?? 0,
+        dropBarA: anA?.dropBar ?? 16,
+        dropBarB: anB?.dropBar ?? 16,
+      };
+      let plan: MixPlan = fallbackPlan(input);
+      try { const res = await planMix({ data: input }); if (res.ok) plan = res.plan; } catch { /* local plan */ }
       if (currentRevision !== revision) return;
+      set({ plan, cue: plan.cue, status: "rendering", statusText: "Rendering audio…" });
+      await djEngine.runPlan(plan);
+      if (currentRevision !== revision) return;
+      set({ ...snapshot(), hasOutput: true, status: "mixing", statusText: "Ready. Play or download your WAV." });
+      void saveMashCut({ data: { nameA: deckA.name, nameB: job === "remix" ? "remix" : job === "both" ? `${deckB.name} · remix mash` : deckB.name, bpmA: deckA.bpm, bpmB: job === "remix" ? plan.targetBpm : deckB.bpm, cue: plan.cue } })
+        .then(() => listMashCuts()).then((recents) => set({ recents })).catch(() => { /* signed out */ });
+    } catch (err) {
+      separationController = null;
+      if (currentRevision !== revision) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       set({ status: "error", error: err instanceof Error ? err.message : "Could not render the mix.", statusText: "Rendering failed. Check your audio and try again.", hasOutput: false, ...snapshot() });
     }
   },
@@ -347,27 +295,14 @@ export const useBooth = create<BoothState>((set, get) => ({
   playMash: async () => {
     if (["loading", "planning", "rendering"].includes(get().status)) return;
     const plan = get().plan;
-    if (plan && get().hasOutput) {
-      studioEngine.stop();
-      await djEngine.runPlan(plan);
-      set({ status: "mixing", statusText: plan.cue, ...snapshot() });
-      return;
-    }
+    if (plan && get().hasOutput) { studioEngine.stop(); await djEngine.runPlan(plan); set({ status: "mixing", statusText: plan.cue, ...snapshot() }); return; }
     await get().dropMix();
   },
 
   stopMix: () => {
     revision++;
+    cancelSeparation();
     djEngine.stopAll();
-    set({
-      status: "idle",
-      statusText: "Stopped.",
-      ...snapshot(),
-      timeA: 0,
-      timeB: 0,
-      playing: false,
-      playingA: false,
-      playingB: false,
-    });
+    set({ status: "idle", statusText: "Stopped.", ...snapshot(), timeA: 0, timeB: 0, playing: false, playingA: false, playingB: false });
   },
 }));
