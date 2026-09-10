@@ -1,3 +1,4 @@
+import { authMiddleware } from "@/lib/auth/middleware";
 import { createServerFn } from "@tanstack/react-start";
 import {
   GenerateInputSchema,
@@ -39,7 +40,7 @@ function syllableBudget(bars: number, bpm: number, mode: string): string {
   return `Max ~${beats * perBeat} syllables. Must be performable in ${bars} bars at ${bpm} BPM. Newline-separated lines.`;
 }
 
-export const generateSong = createServerFn({ method: "POST" })
+export const generateSong = createServerFn({ method: "POST" }).middleware([authMiddleware])
   .validator((input: unknown) => GenerateInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; song: Song } | { ok: false; error: string }> => {
     const prompt = data.prompt.toLowerCase();
@@ -241,7 +242,7 @@ function speakScript(
   };
 }
 
-export const renderVocal = createServerFn({ method: "POST" })
+export const renderVocal = createServerFn({ method: "POST" }).middleware([authMiddleware])
   .validator((input: unknown) => RenderVocalInputSchema.parse(input))
   .handler(
     async ({

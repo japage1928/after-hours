@@ -62,11 +62,11 @@ function Login() {
       <div className="w-full max-w-sm space-y-5">
         <div>
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Late-night studio
+            Mashup Pro
           </p>
-          <h1 className="font-display mt-1 text-4xl tracking-tight">After Hours</h1>
+          <h1 className="font-display mt-1 text-4xl tracking-tight">Mashup Pro</h1>
           <p className="mt-2 text-sm text-muted">
-            Sign in to keep your tape shelf and mash history.
+            Sign in to mix, remix and download your songs.
           </p>
         </div>
         {authEnabled ? (

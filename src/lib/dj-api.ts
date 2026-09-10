@@ -1,3 +1,4 @@
+import { authMiddleware } from "@/lib/auth/middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { snapClubBpm } from "@/lib/bpm";
@@ -111,7 +112,7 @@ Never clone artist voices. JSON only.`;
   return rules;
 }
 
-export const planMix = createServerFn({ method: "POST" })
+export const planMix = createServerFn({ method: "POST" }).middleware([authMiddleware])
   .validator((input: unknown) => PlanMixInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; plan: MixPlan } | { ok: false; error: string; plan: MixPlan }> => {
     const local = fallbackPlan(data);

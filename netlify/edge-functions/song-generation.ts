@@ -1,3 +1,4 @@
+import { requireAccount } from "./_shared/require-account.ts";
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 const ACE_STEP_VERSION = "fishaudio/ace-step-1.5:74e3a7d383b18815e277de5223f5fe9d53d38832de15aa567fe729fa129d0d85";
 
@@ -9,6 +10,8 @@ function authHeaders(token: string) {
 }
 
 export default async function songGeneration(request: Request) {
+  const denied = await requireAccount(request);
+  if (denied) return denied;
   const token = Netlify.env.get("REPLICATE_API_TOKEN");
   if (!token) return Response.json({ error: "Music generation is not configured." }, { status: 503 });
 

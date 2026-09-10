@@ -1,3 +1,4 @@
+import { requireAccount } from "./_shared/require-account.ts";
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 const DEMUCS_VERSION = "25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953";
 
@@ -18,6 +19,8 @@ function authHeaders(token: string) {
 }
 
 export default async function stemPrediction(request: Request) {
+  const denied = await requireAccount(request);
+  if (denied) return denied;
   const rawToken = Netlify.env.get("REPLICATE_API_TOKEN") ?? "";
   const token = normalizeToken(rawToken);
   if (!token) return Response.json({ error: "Stem separation is not configured." }, { status: 503 });

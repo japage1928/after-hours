@@ -1,3 +1,4 @@
+import { requireAccount } from "./_shared/require-account.ts";
 const PREFIX = "/api/orchestrate/";
 const ALLOWED = new Set(["song-plan", "song", "remix", "mashup", "status"]);
 
@@ -6,6 +7,8 @@ function cleanBase(value: string) {
 }
 
 export default async function n8nProxy(request: Request) {
+  const denied = await requireAccount(request);
+  if (denied) return denied;
   const base = cleanBase(Netlify.env.get("N8N_WEBHOOK_BASE_URL") ?? "");
   if (!base) {
     return Response.json(
