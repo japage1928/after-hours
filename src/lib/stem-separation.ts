@@ -1,5 +1,4 @@
 import {
-  N8nNotConfiguredError,
   startN8nStemJob,
   waitForN8nJob,
 } from "@/lib/n8n-orchestrator";
@@ -70,11 +69,16 @@ async function separateSongThroughN8n(file: File, signal?: AbortSignal) {
   return output;
 }
 
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export async function separateSong(file: File, signal?: AbortSignal) {
   try {
     return await separateSongThroughN8n(file, signal);
   } catch (error) {
-    if (!(error instanceof N8nNotConfiguredError)) throw error;
+    if (signal?.aborted || isAbort(error)) throw error;
+    console.warn("Mashup Pro n8n stem separation failed; using temporary legacy fallback.", error);
     return separateSongLegacy(file, signal);
   }
 }
