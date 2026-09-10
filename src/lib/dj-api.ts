@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { snapClubBpm } from "@/lib/bpm";
 
 export const MixJobSchema = z.enum(["mashup", "remix", "both"]);
 export type MixJob = z.infer<typeof MixJobSchema>;
@@ -37,8 +38,7 @@ export type PlanMixInput = z.infer<typeof PlanMixInputSchema>;
 export function fallbackPlan(input: PlanMixInput): MixPlan {
   const job = input.job;
   if (job === "remix") {
-    const targetBpm =
-      input.bpmA < 118 ? 126 : input.bpmA < 130 ? 140 : 124;
+    const targetBpm = snapClubBpm(input.bpmA, "remix");
     const bar = (60 / input.bpmA) * 4;
     return {
       job,
@@ -46,40 +46,38 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
       aOffsetSec: 0,
       bOffsetSec: 0,
       mixInSec: 0,
-      crossfadeSec: 4,
-      holdSec: 24,
-      dropSec: bar * 4,
+      crossfadeSec: 8,
+      holdSec: 32,
+      dropSec: bar * 8,
       bassBoost: 0.6,
       midCut: -0.3,
       air: 0.35,
       pump: true,
       sweepA: true,
-      cue: `Club remix of ${input.nameA} at ${targetBpm} BPM — new kick, chopped vocal, drop at bar 5.`,
+      cue: `DJ remix of ${input.nameA} at ${targetBpm} — 32-bar club edit, new drums, vocal on top, drop at bar 9.`,
     };
   }
-  const targetBpm = Math.round((input.bpmA + (input.bpmB || input.bpmA)) / 2);
+  const targetBpm = snapClubBpm((input.bpmA + (input.bpmB || input.bpmA)) / 2, job);
   const barA = (60 / input.bpmA) * 4;
   const barB = (60 / (input.bpmB || input.bpmA)) * 4;
-  const mixInSec = Math.min(input.durationA * 0.45, barA * 8);
-  const crossfadeSec = Math.min(barA * 4, 16);
   const remix = job === "both";
   return {
     job,
     targetBpm,
     aOffsetSec: 0,
-    bOffsetSec: input.durationB > barB * 8 ? barB * 4 : 0,
-    mixInSec: Math.max(4, mixInSec),
-    crossfadeSec: Math.max(4, crossfadeSec),
-    holdSec: Math.min(16, Math.max(8, input.durationB * 0.4)),
-    dropSec: Math.max(4, mixInSec),
+    bOffsetSec: input.durationB > barB * 8 ? barB * 8 : 0,
+    mixInSec: barA * 8,
+    crossfadeSec: barA * 8,
+    holdSec: barA * 16,
+    dropSec: barA * 8,
     bassBoost: remix ? 0.5 : 0,
     midCut: remix ? -0.2 : 0,
     air: remix ? 0.25 : 0,
     pump: remix,
     sweepA: true,
     cue: remix
-      ? `Remix mash ${input.nameA} × ${input.nameB} at ${targetBpm} — new drums, A chopped, B in at the drop.`
-      : `Beat-match to ${targetBpm}, ride A, then bring B in over four bars.`,
+      ? `Bootleg of ${input.nameA} × ${input.nameB} at ${targetBpm} — new drums, A then B over the drop.`
+      : `DJ mashup ${input.nameA} × ${input.nameB} at ${targetBpm} — phrase-locked, bass swap at bar 17.`,
   };
 }
 
@@ -94,12 +92,12 @@ function extractJson(text: string): unknown {
 
 function systemFor(job: MixJob): string {
   if (job === "remix") {
-    return "You are a remix engineer. One track. Plan a club remix with a NEW drum bed, chopped vocal, and a drop — not a playback of the original. New tempo must jump at least 8 BPM. Never clone artist voices. JSON only.";
+    return "You are a club DJ producing a finished 32-bar edit a working DJ would play. Phrase-lock to 8 bars. New drum bed. Original stays high-passed so kicks do not clash. Drop at bar 9. Never clone artist voices. JSON only.";
   }
   if (job === "both") {
-    return "You are a DJ remixing a two-song mashup. Beat-match AND restyle: new tempo, EQ, a drop where B enters. Never clone artist voices. JSON only.";
+    return "You are a club DJ producing a 32-bar bootleg mashup. New drums. A on the first drop, B on the second. Originals stay high-passed. Phrase-lock 8 bars. Never clone artist voices. JSON only.";
   }
-  return "You are a club DJ programming a two-deck mix. Plan beat-matching and a crossfade. Never request copyrighted audio, never clone artist voices. JSON only.";
+  return "You are a club DJ producing a 32-bar mashup. Beat-match, phrase-lock 8 bars, bass-swap at bar 17 (A lows out, B lows in). No extra drums. Never clone artist voices. JSON only.";
 }
 
 export const planMix = createServerFn({ method: "POST" })
@@ -162,6 +160,7 @@ Offsets must fit inside each track.`,
       const plan: MixPlan = {
         ...parsed,
         job: data.job,
+        targetBpm: snapClubBpm(parsed.targetBpm, data.job),
         aOffsetSec: Math.min(parsed.aOffsetSec, aMax),
         bOffsetSec: Math.min(parsed.bOffsetSec, bMax),
         mixInSec: data.job === "remix" ? 0 : Math.min(parsed.mixInSec, Math.max(2, data.durationA - parsed.aOffsetSec - 2)),

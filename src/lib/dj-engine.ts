@@ -331,24 +331,12 @@ export class DjEngine {
     await this.ensure();
     if (!this.ctx) return;
     this.stopAll();
-    if (plan.job === "mashup") {
-      this.remixDuck = 1;
-      this.applyRemixTone(plan);
-      this.setTargetBpm(plan.targetBpm);
-      this.setXfader(-1);
-      this.setFilter("a", 0);
-      this.setFilter("b", 0);
-      const now = this.ctx.currentTime + 0.08;
-      await this.playDeck("a", plan.aOffsetSec, now);
-      await this.playDeck("b", plan.bOffsetSec, now + plan.mixInSec);
-      this.animateJob(plan, false);
-      return;
-    }
     const sourceA = this.decks.a.buffer;
     if (!sourceA) return;
+    if (plan.job !== "remix" && !this.decks.b.buffer) return;
     const buffer = await renderRemix({
       sourceA,
-      sourceB: plan.job === "both" ? this.decks.b.buffer : null,
+      sourceB: plan.job === "remix" ? null : this.decks.b.buffer,
       bpmA: this.decks.a.info.bpm,
       bpmB: this.decks.b.info.bpm,
       offsetA: this.decks.a.info.offset,

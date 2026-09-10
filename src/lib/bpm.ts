@@ -1,3 +1,11 @@
+export function snapClubBpm(bpm: number, job: "mashup" | "remix" | "both") {
+  const x = Math.min(150, Math.max(100, bpm));
+  if (job === "mashup") return Math.round(x);
+  if (x < 122) return 126;
+  if (x <= 132) return 128;
+  return 140;
+}
+
 export type BpmGuess = {
   bpm: number;
   offset: number;
@@ -67,14 +75,23 @@ export function detectBpm(buffer: AudioBuffer): BpmGuess {
   bpm = Math.round(bpm * 2) / 2;
   bpm = Math.min(178, Math.max(72, bpm));
 
-  let offset = 0;
-  const thresh = 0.35 * Math.max(...Array.from(env.subarray(0, Math.min(env.length, ENV_RATE * 4))));
-  for (let i = 0; i < Math.min(env.length, ENV_RATE * 8); i++) {
-    if ((env[i] ?? 0) >= thresh) {
-      offset = i / ENV_RATE;
-      break;
+  const beatEnv = (60 / bpm) * ENV_RATE;
+  let bestOff = 0;
+  let bestScore = -1;
+  const search = Math.min(env.length, Math.max(1, Math.round(beatEnv * 4)));
+  for (let off = 0; off < search; off++) {
+    let s = 0;
+    for (let k = 0; k < 24; k++) {
+      const i = Math.round(off + k * beatEnv);
+      if (i >= env.length) break;
+      s += env[i] ?? 0;
+    }
+    if (s > bestScore) {
+      bestScore = s;
+      bestOff = off;
     }
   }
+  const offset = bestOff / ENV_RATE;
 
   return { bpm, offset, peaks: waveformPeaks(buffer) };
 }
