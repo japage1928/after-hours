@@ -1,9 +1,19 @@
 const REPLICATE_FILES_URL = "https://api.replicate.com/v1/files";
 
+function normalizeToken(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .replace(/^Token\s+/i, "")
+    .replace(/^['\"]|['\"]$/g, "")
+    .trim();
+}
+
 export default async function stemUpload(request: Request) {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const token = Netlify.env.get("REPLICATE_API_TOKEN");
+  const rawToken = Netlify.env.get("REPLICATE_API_TOKEN") ?? "";
+  const token = normalizeToken(rawToken);
   if (!token) return Response.json({ error: "Stem separation is not configured." }, { status: 503 });
 
   const contentType = request.headers.get("content-type") ?? "";
