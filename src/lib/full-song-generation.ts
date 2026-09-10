@@ -1,6 +1,11 @@
 import type { Song } from "@/lib/types";
 import { genreById } from "@/lib/genres";
 import { vocalistById } from "@/lib/vocalists";
+import {
+  N8nNotConfiguredError,
+  startN8nSongJob,
+  waitForN8nJob,
+} from "@/lib/n8n-orchestrator";
 
 type Prediction = {
   id: string;
@@ -33,7 +38,7 @@ function productionPrompt(song: Song): string {
     genre,
     song.mood,
     voiceDescription,
-    `polished commercial production, coherent full-song arrangement, strong memorable chorus, natural transitions, dynamic build and release`,
+    "polished commercial production, coherent full-song arrangement, strong memorable chorus, natural transitions, dynamic build and release",
     `tempo ${song.bpm} BPM, key ${song.key}`,
     song.prompt,
   ]
@@ -48,7 +53,40 @@ function targetDuration(song: Song): number {
   return Math.max(20, Math.min(600, Math.round(seconds)));
 }
 
-export async function generateFullSong(song: Song, signal?: AbortSignal): Promise<AudioBuffer> {
+async function decodeRemoteAudio(url: string, signal?: AbortSignal): Promise<AudioBuffer> {
+  const audioResponse = await fetch(url, { signal });
+  if (!audioResponse.ok) throw new Error("Could not download the generated song.");
+  const bytes = await audioResponse.arrayBuffer();
+  const context = new AudioContext();
+  try {
+    return await context.decodeAudioData(bytes.slice(0));
+  } finally {
+    void context.close();
+  }
+}
+
+async function generateThroughN8n(song: Song, signal?: AbortSignal): Promise<AudioBuffer> {
+  const output = await waitForN8nJob(
+    await startN8nSongJob(
+      {
+        prompt: productionPrompt(song),
+        lyrics: structuredLyrics(song),
+        duration: targetDuration(song),
+        bpm: song.bpm,
+        keyScale: song.key,
+      },
+      signal,
+    ),
+    "song",
+    15 * 60_000,
+    signal,
+  );
+  const url = Array.isArray(output) ? output[0] : output;
+  if (!url) throw new Error("n8n music workflow returned no audio.");
+  return decodeRemoteAudio(url, signal);
+}
+
+async function generateLegacy(song: Song, signal?: AbortSignal): Promise<AudioBuffer> {
   const response = await fetch("/api/song-generation", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -79,13 +117,14 @@ export async function generateFullSong(song: Song, signal?: AbortSignal): Promis
 
   const url = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
   if (!url) throw new Error("Music generator returned no audio.");
-  const audioResponse = await fetch(url, { signal });
-  if (!audioResponse.ok) throw new Error("Could not download the generated song.");
-  const bytes = await audioResponse.arrayBuffer();
-  const context = new AudioContext();
+  return decodeRemoteAudio(url, signal);
+}
+
+export async function generateFullSong(song: Song, signal?: AbortSignal): Promise<AudioBuffer> {
   try {
-    return await context.decodeAudioData(bytes.slice(0));
-  } finally {
-    void context.close();
+    return await generateThroughN8n(song, signal);
+  } catch (error) {
+    if (!(error instanceof N8nNotConfiguredError)) throw error;
+    return generateLegacy(song, signal);
   }
 }
