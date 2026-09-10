@@ -191,7 +191,12 @@ export class DjEngine {
     await this.ensure();
     if (!this.ctx) throw new Error("Audio is not ready.");
     const data = await file.arrayBuffer();
-    return this.ctx.decodeAudioData(data.slice(0));
+    try {
+      // slice() copies — required on some Safari builds that detach the buffer.
+      return await this.ctx.decodeAudioData(data.slice(0));
+    } catch {
+      throw new Error("Safari couldn’t decode that audio.");
+    }
   }
 
   loadUpload(id: DeckId, buffer: AudioBuffer, name: string, guess?: BpmGuess) {

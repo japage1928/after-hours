@@ -1,10 +1,15 @@
 import { create } from "zustand";
+import {
+  audioDecodeErrorMessage,
+  classifyAudioFile,
+  displayTrackName,
+} from "@/lib/audio-file";
 import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
 
-const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_BYTES = 40 * 1024 * 1024;
 
 export type BoothStatus = "idle" | "loading" | "planning" | "mixing" | "error";
 
@@ -148,37 +153,51 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   loadFile: async (id, file) => {
-    if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
-      set({ status: "error", error: "That file is not audio.", statusText: "Need an audio file." });
+    const verdict = classifyAudioFile(file);
+    if (verdict === "no") {
+      set({
+        status: "error",
+        error: "That file is not audio. On iPhone, choose an M4A or MP3 from Files or Voice Memos.",
+        statusText: "Need an audio file.",
+      });
+      return;
+    }
+    if (file.size <= 0) {
+      set({
+        status: "error",
+        error: "That file is empty.",
+        statusText: "Need an audio file.",
+      });
       return;
     }
     if (file.size > MAX_BYTES) {
       set({
         status: "error",
-        error: "Keep each track under 20 MB.",
+        error: "Keep each track under 40 MB.",
         statusText: "File too heavy.",
       });
       return;
     }
+    const label = displayTrackName(file);
     set({
       status: "loading",
-      statusText: `Reading ${file.name}`,
+      statusText: `Reading ${label}`,
       error: null,
     });
     try {
       studioEngine.stop();
       const buffer = await djEngine.decodeFile(file);
       const guess = detectBpm(buffer);
-      djEngine.loadUpload(id, buffer, file.name, guess);
+      djEngine.loadUpload(id, buffer, label, guess);
       set({
         status: "idle",
-        statusText: `${file.name.replace(/\.[^.]+$/, "")} · ${guess.bpm} BPM`,
+        statusText: `${label} · ${guess.bpm} BPM`,
         ...snapshot(),
       });
     } catch (err) {
       set({
         status: "error",
-        error: err instanceof Error ? err.message : "Could not decode that track.",
+        error: audioDecodeErrorMessage(err),
         statusText: "Could not read the track.",
       });
     }

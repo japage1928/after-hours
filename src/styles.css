@@ -32,12 +32,15 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   html,
   body,
   #app {
     min-height: 100dvh;
+    min-height: -webkit-fill-available;
     background: var(--color-bg);
     color: var(--color-fg);
     overflow-x: hidden;
@@ -47,6 +50,8 @@
     font-family: var(--font-sans);
     background-color: var(--color-bg);
     color: var(--color-fg);
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body::after {
@@ -71,12 +76,26 @@
   }
 
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role="button"]:not(:disabled),
+  label[for] {
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .dock-safe {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 }
 

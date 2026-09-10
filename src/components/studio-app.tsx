@@ -38,49 +38,59 @@ export function StudioApp() {
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-bg text-fg">
-      <header className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-5 pb-2 md:px-8 md:pt-8">
-        <div className="min-w-0">
-          <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Late-night studio
-          </p>
-          <p className="font-display text-3xl leading-none tracking-tight text-fg md:text-4xl">
-            After Hours
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="flex rounded-md bg-surface-2 p-1 shadow-border">
-            {(
-              [
-                ["mash", "Mash"],
-                ["write", "Write"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => go(id)}
-                className={cn(
-                  "h-11 rounded-sm px-3 text-sm font-medium transition-colors duration-150",
-                  room === id ? "bg-accent text-accent-fg" : "text-muted hover:text-fg",
-                )}
-              >
-                {label}
-              </button>
-            ))}
+      <header className="sticky top-0 z-20 border-b border-transparent bg-bg/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 md:px-8 md:pt-[max(2rem,env(safe-area-inset-top))] md:pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-widest text-muted uppercase">
+              Late-night studio
+            </p>
+            <p className="font-display text-[1.75rem] leading-none tracking-tight text-fg sm:text-3xl md:text-4xl">
+              After Hours
+            </p>
           </div>
-          {room === "write" ? (
-            <Button
-              variant="secondary"
-              onClick={() => useStudio.getState().setLibraryOpen(!libraryOpen)}
+          <div className="flex shrink-0 items-center gap-2">
+            <div
+              className="flex rounded-md bg-surface-2 p-1 shadow-border"
+              role="tablist"
+              aria-label="Studio rooms"
             >
-              <Library />
-              Tape shelf
-            </Button>
-          ) : null}
+              {(
+                [
+                  ["mash", "Mash"],
+                  ["write", "Write"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={room === id}
+                  onClick={() => go(id)}
+                  className={cn(
+                    "h-11 min-w-[4.5rem] rounded-sm px-3 text-sm font-medium transition-colors duration-150",
+                    room === id ? "bg-accent text-accent-fg" : "text-muted hover:text-fg",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {room === "write" ? (
+              <Button
+                variant="secondary"
+                className="h-11"
+                onClick={() => useStudio.getState().setLibraryOpen(!libraryOpen)}
+              >
+                <Library />
+                <span className="hidden sm:inline">Tape shelf</span>
+                <span className="sm:hidden">Shelf</span>
+              </Button>
+            ) : null}
+          </div>
         </div>
       </header>
 
-      <p className="mx-auto max-w-7xl px-4 pb-4 text-sm text-muted md:px-8">
+      <p className="mx-auto max-w-7xl px-4 pb-3 text-sm text-muted md:px-8 md:pb-4">
         {room === "mash"
           ? "Load song A and song B. Mash them into one cut."
           : "Write original songs. Explicit if you want. Two voices on one beat."}
@@ -90,7 +100,7 @@ export function StudioApp() {
         <MashPanel />
       ) : (
         <>
-          <div className="mx-auto grid max-w-7xl min-w-0 gap-5 px-4 pb-44 md:px-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8">
+          <div className="mx-auto grid max-w-7xl min-w-0 gap-4 px-4 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:gap-5 md:px-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8 lg:pb-[calc(7.5rem+env(safe-area-inset-bottom))]">
             <WritePanel />
             <PlayerStage />
           </div>
@@ -105,6 +115,7 @@ export function StudioApp() {
         toastOptions={{
           className: "bg-surface text-fg border-line",
         }}
+        offset="calc(env(safe-area-inset-top) + 12px)"
       />
     </div>
   );

@@ -40,7 +40,7 @@ export function PlayerStage() {
         {song.isDemo ? <Badge>House cut</Badge> : null}
       </div>
 
-      <h1 className="font-display mt-3 text-4xl leading-none tracking-tight text-fg md:text-6xl">
+      <h1 className="font-display mt-3 text-[2rem] leading-none tracking-tight text-fg sm:text-4xl md:text-6xl">
         {song.title}
       </h1>
       <p className="mt-2 text-sm text-muted md:text-base">

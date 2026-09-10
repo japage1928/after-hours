@@ -19,7 +19,7 @@ export function TransportBar() {
   const total = engine.beatsToSeconds(durationBeats || 1);
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg">
+    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl min-w-0 flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:gap-6 md:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <Button

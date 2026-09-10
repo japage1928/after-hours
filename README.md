@@ -11,6 +11,8 @@ Late-night mashup studio. Load **Song A** and **Song B**, mash them into one bea
 
 Does not pull catalog tracks or clone celebrity voices.
 
+On iPhone, tap **Choose** on Song A / Song B and pick an **M4A** or **MP3** from Files, Downloads, or Voice Memos. Apple Music catalog tracks cannot be uploaded.
+
 ## Run locally
 
 ```bash
