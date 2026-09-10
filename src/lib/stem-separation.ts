@@ -1,4 +1,5 @@
 import {
+  startN8nMashupJobs,
   startN8nStemJob,
   waitForN8nJob,
 } from "@/lib/n8n-orchestrator";
@@ -169,8 +170,26 @@ export async function makeAutomaticRemixSource(song: File, bpm: number, cueSec: 
   return offline.startRendering();
 }
 
-export async function makeAutomaticMashupStems(songA: File, songB: File, signal?: AbortSignal) {
-  const [a, b] = await Promise.all([separateSong(songA, signal), separateSong(songB, signal)]);
-  const [instrumentalA, vocalsB] = await Promise.all([decodeInstrumentalStem(a, signal), decodeVocalStem(b, signal)]);
-  return { instrumentalA, vocalsB };
+export async function makeAutomaticMashupStems(
+  songA: File,
+  songB: File,
+  signal?: AbortSignal,
+  metadata: Parameters<typeof startN8nMashupJobs>[2] = {},
+) {
+  try {
+    const started = await startN8nMashupJobs(songA, songB, metadata, signal);
+    const [a, b] = await Promise.all([
+      waitForN8nJob<Record<string, string>>({ jobId: started.jobs.A, status: "starting" }, "stems", 12 * 60_000, signal),
+      waitForN8nJob<Record<string, string>>({ jobId: started.jobs.B, status: "starting" }, "stems", 12 * 60_000, signal),
+    ]);
+    if (!a.vocals || !b.vocals) throw new Error("n8n mashup separation returned incomplete stems.");
+    const [instrumentalA, vocalsB] = await Promise.all([decodeInstrumentalStem(a, signal), decodeVocalStem(b, signal)]);
+    return { instrumentalA, vocalsB, mixPlan: started.mixPlan ?? null };
+  } catch (error) {
+    if (signal?.aborted || isAbort(error)) throw error;
+    console.warn("Mashup Pro n8n mashup orchestration failed; using temporary legacy stem fallback.", error);
+    const [a, b] = await Promise.all([separateSongLegacy(songA, signal), separateSongLegacy(songB, signal)]);
+    const [instrumentalA, vocalsB] = await Promise.all([decodeInstrumentalStem(a, signal), decodeVocalStem(b, signal)]);
+    return { instrumentalA, vocalsB, mixPlan: null };
+  }
 }
