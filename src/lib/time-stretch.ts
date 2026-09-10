@@ -1,4 +1,6 @@
-import { SimpleFilter, SoundTouch } from "soundtouchjs";
+import soundtouch from "soundtouchjs";
+
+const { SimpleFilter, SoundTouch } = soundtouch;
 
 /** Change tempo independently of pitch. Yield regularly so Stop remains responsive. */
 export async function stretchAudio(buffer: AudioBuffer, tempo: number, semitones = 0, signal?: AbortSignal): Promise<AudioBuffer> {
