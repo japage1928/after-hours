@@ -19,6 +19,9 @@ import { cn } from "@/lib/utils";
 type Room = "mash" | "write";
 
 const rootRoute = getRouteApi("__root__");
+// Keep the unfinished Write Song implementation in the codebase, but do not
+// expose it in production navigation until it is ready to ship.
+const visibleRooms = [["mash", "Mix"]] as const;
 
 export function StudioApp() {
   const hydrate = useStudio((s) => s.hydrate);
@@ -60,11 +63,7 @@ export function StudioApp() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex rounded-md bg-surface-2 p-1 shadow-border">
-            {(
-              [
-                ["mash", "Mix"],
-              ] as const
-            ).map(([id, label]) => (
+            {visibleRooms.map(([id, label]) => (
               <button
                 key={id}
                 type="button"
