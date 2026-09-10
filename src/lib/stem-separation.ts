@@ -1,3 +1,9 @@
+import {
+  N8nNotConfiguredError,
+  startN8nStemJob,
+  waitForN8nJob,
+} from "@/lib/n8n-orchestrator";
+
 type Prediction = {
   id: string;
   status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
@@ -48,9 +54,29 @@ async function waitForPrediction(initial: Prediction, signal?: AbortSignal): Pro
   return out;
 }
 
-export async function separateSong(file: File, signal?: AbortSignal) {
+async function separateSongLegacy(file: File, signal?: AbortSignal) {
   const audio = await uploadSong(file, signal);
   return waitForPrediction(await createPrediction(audio, signal), signal);
+}
+
+async function separateSongThroughN8n(file: File, signal?: AbortSignal) {
+  const output = await waitForN8nJob(
+    await startN8nStemJob(file, signal),
+    "stems",
+    12 * 60_000,
+    signal,
+  );
+  if (!output.vocals) throw new Error("n8n stem workflow returned no vocal stem.");
+  return output;
+}
+
+export async function separateSong(file: File, signal?: AbortSignal) {
+  try {
+    return await separateSongThroughN8n(file, signal);
+  } catch (error) {
+    if (!(error instanceof N8nNotConfiguredError)) throw error;
+    return separateSongLegacy(file, signal);
+  }
 }
 
 async function decodeUrl(url: string, signal?: AbortSignal) {
