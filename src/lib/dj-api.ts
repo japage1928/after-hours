@@ -32,6 +32,12 @@ export const PlanMixInputSchema = z.object({
   durationA: z.number().min(1).max(900),
   durationB: z.number().min(0).max(900).default(0),
   prompt: z.string().max(400),
+  energyA: z.string().max(400).default(""),
+  energyB: z.string().max(400).default(""),
+  peakASec: z.number().min(0).max(600).default(0),
+  peakBSec: z.number().min(0).max(600).default(0),
+  dropBarA: z.number().int().min(0).max(200).default(16),
+  dropBarB: z.number().int().min(0).max(200).default(16),
 });
 export type PlanMixInput = z.infer<typeof PlanMixInputSchema>;
 
@@ -43,7 +49,7 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
     return {
       job,
       targetBpm,
-      aOffsetSec: 0,
+      aOffsetSec: input.peakASec || 0,
       bOffsetSec: 0,
       mixInSec: 0,
       crossfadeSec: 8,
@@ -64,8 +70,8 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
   return {
     job,
     targetBpm,
-    aOffsetSec: 0,
-    bOffsetSec: input.durationB > barB * 8 ? barB * 8 : 0,
+    aOffsetSec: input.peakASec || 0,
+    bOffsetSec: input.peakBSec || (input.durationB > barB * 8 ? barB * 8 : 0),
     mixInSec: barA * 8,
     crossfadeSec: barA * 8,
     holdSec: barA * 16,
@@ -91,13 +97,17 @@ function extractJson(text: string): unknown {
 }
 
 function systemFor(job: MixJob): string {
-  if (job === "remix") {
-    return "You are a club DJ producing a finished 32-bar edit a working DJ would play. Phrase-lock to 8 bars. New drum bed. Original stays high-passed so kicks do not clash. Drop at bar 9. Never clone artist voices. JSON only.";
-  }
-  if (job === "both") {
-    return "You are a club DJ producing a 32-bar bootleg mashup. New drums. A on the first drop, B on the second. Originals stay high-passed. Phrase-lock 8 bars. Never clone artist voices. JSON only.";
-  }
-  return "You are a club DJ producing a 32-bar mashup. Beat-match, phrase-lock 8 bars, bass-swap at bar 17 (A lows out, B lows in). No extra drums. Never clone artist voices. JSON only.";
+  const rules = `You are a working club DJ. Produce a 32-bar edit a real DJ would play.
+Rules:
+- Only mix or drop on an 8-bar phrase (bar 9 or 17). Never in the middle of a phrase.
+- aOffsetSec/bOffsetSec must be the start of a high-energy phrase (the drop/chorus), on a bar line.
+- Mashup: ride A 16 bars, bass-swap on the 1 of bar 17, ride B. Do not loop the same 8 bars.
+- Remix: drums intro 8 bars, tease the vocal, drop the record at bar 9 and RIDE it. Original stays high-passed.
+- Cue: one sentence a DJ would say in the booth.
+Never clone artist voices. JSON only.`;
+  if (job === "remix") return rules;
+  if (job === "both") return `${rules}\nBootleg: new drums, A through the first drop, B from bar 17.`;
+  return rules;
 }
 
 export const planMix = createServerFn({ method: "POST" })
@@ -127,27 +137,30 @@ export const planMix = createServerFn({ method: "POST" })
               role: "user",
               content: `Job: ${data.job}
 Track A: "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
-${data.job === "remix" ? "" : `Track B: "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s`}
-Note: ${data.prompt || (data.job === "remix" ? "Club remix, heavier kick, open the drop." : "Smooth blend, keep the kick.")}
+A energy by bar (low→high): ${data.energyA || "n/a"}
+A drop around bar ${data.dropBarA}, loudest phrase at ${data.peakASec.toFixed(1)}s
+${data.job === "remix" ? "" : `Track B: "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s
+B energy by bar: ${data.energyB || "n/a"}
+B drop around bar ${data.dropBarB}, loudest phrase at ${data.peakBSec.toFixed(1)}s`}
+Note: ${data.prompt || (data.job === "remix" ? "Club remix. Ride the drop." : "Phrase mix. Bass swap on the 1.")}
 
 JSON:
 {
   "job": "${data.job}",
   "targetBpm": number,
-  "aOffsetSec": seconds into A to start,
-  "bOffsetSec": seconds into B to enter (0 if remix),
-  "mixInSec": seconds after A starts before B enters (0 if remix),
-  "crossfadeSec": 4-16,
-  "holdSec": seconds to ride after the drop,
-  "dropSec": seconds until the filter opens,
+  "aOffsetSec": bar-aligned seconds into A (use the loud phrase),
+  "bOffsetSec": bar-aligned seconds into B (0 if remix),
+  "mixInSec": 0, 8, or 16 bars in seconds,
+  "crossfadeSec": 8,
+  "holdSec": 16,
+  "dropSec": 8 or 16 bars in seconds,
   "bassBoost": -1 to 1,
   "midCut": -1 to 1,
   "air": -1 to 1,
   "pump": true,
   "sweepA": true,
-  "cue": "one short sentence"
-}
-Offsets must fit inside each track.`,
+  "cue": "one short booth sentence"
+}`,
             },
           ],
         }),

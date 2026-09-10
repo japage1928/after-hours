@@ -74,9 +74,9 @@ function makeKick(ctx: OfflineAudioContext, sr: number) {
   let phase = 0;
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    const f = 47 + 145 * Math.exp(-t * 48);
+    const f = 50 + 120 * Math.exp(-t * 55);
     phase += (2 * Math.PI * f) / sr;
-    const body = Math.sin(phase) * Math.exp(-t * 12.5);
+    const body = Math.sin(phase) * Math.exp(-t * 16);
     const click = Math.sin(2 * Math.PI * 2100 * t) * Math.exp(-t * 95) * 0.28;
     const noise = (Math.random() * 2 - 1) * Math.exp(-t * 130) * 0.12;
     d[i] = Math.tanh((body + click + noise) * 1.55);
@@ -163,6 +163,46 @@ function playGrain(
   src.connect(g);
   g.connect(dest);
   src.start(when, off, dur);
+}
+
+function playRide(
+  offline: OfflineAudioContext,
+  buffer: AudioBuffer,
+  dest: AudioNode,
+  when: number,
+  startSec: number,
+  barsNeeded: number,
+  barSrc: number,
+  rate: number,
+  gain: number,
+) {
+  const need = barsNeeded * barSrc;
+  const available = Math.max(0, buffer.duration - startSec);
+  if (available >= need - 0.01) {
+    playGrain(offline, buffer, dest, when, startSec, need, rate, gain);
+    return;
+  }
+  if (available < 0.08) return;
+  playGrain(offline, buffer, dest, when, startSec, available, rate, gain);
+  const playedBars = available / barSrc;
+  const left = barsNeeded - playedBars;
+  if (left > 0.25) {
+    playGrain(
+      offline,
+      buffer,
+      dest,
+      when + (available / rate),
+      startSec,
+      left * barSrc,
+      rate,
+      gain,
+    );
+  }
+}
+
+function snapBar(sec: number, bar: number, duration: number, needBars: number) {
+  const q = Math.round(sec / bar) * bar;
+  return clamp(q, 0, Math.max(0, duration - bar * needBars));
 }
 
 function duckToKick(gain: GainNode, times: number[], beat: number, peak = 0.72) {
@@ -283,12 +323,14 @@ export async function renderRemix(input: RenderInput): Promise<AudioBuffer> {
   drums.gain.value = job === "mashup" ? 0 : 0.86;
   drums.connect(master);
 
-  const dropBar = job === "mashup" ? 16 : 8;
-  const kicks = job === "mashup" ? [] : scheduleDrums(offline, drums, target, bars, dropBar);
+  const dropBar =
+    job === "mashup" ? 16 : clamp(Math.round((plan.dropSec || 8 * barOut) / barOut / 8) * 8, 8, 16);
+  const kicks = job === "mashup" ? [] : scheduleDrums(offline, drums, target, bars, job === "both" ? 8 : dropBar);
 
-  const phraseA = pickPhrase(sourceA, input.offsetA, barA, 8);
-  const phraseB = sourceB ? pickPhrase(sourceB, input.offsetB, barB, 8) : 0;
-  const hookA = pickPhrase(sourceA, input.offsetA, barA, 2);
+  const startA = snapBar(plan.aOffsetSec || input.offsetA, barA, sourceA.duration, 8);
+  const startB = sourceB
+    ? snapBar(plan.bOffsetSec || input.offsetB, barB, sourceB.duration, 8)
+    : 0;
 
   if (job === "mashup" && sourceB) {
     const aBus = bus(offline, 40);
@@ -297,65 +339,52 @@ export async function renderRemix(input: RenderInput): Promise<AudioBuffer> {
     aBus.g.connect(delay);
     bBus.g.connect(master);
     bBus.g.connect(delay);
-    bBus.hp.frequency.setValueAtTime(340, 0);
-    bBus.hp.frequency.setValueAtTime(340, 8 * barOut);
-    bBus.hp.frequency.exponentialRampToValueAtTime(40, 16 * barOut);
+    bBus.hp.frequency.setValueAtTime(360, 0);
+    bBus.hp.frequency.setValueAtTime(360, 8 * barOut);
+    bBus.hp.frequency.exponentialRampToValueAtTime(45, 16 * barOut);
     aBus.hp.frequency.setValueAtTime(40, 0);
     aBus.hp.frequency.setValueAtTime(40, 16 * barOut);
-    aBus.hp.frequency.exponentialRampToValueAtTime(280, 17 * barOut);
-    aBus.g.gain.setValueAtTime(0.82, 0);
-    aBus.g.gain.setValueAtTime(0.82, 24 * barOut);
-    aBus.g.gain.linearRampToValueAtTime(0, 28 * barOut);
-    bBus.g.gain.setValueAtTime(0.2, 0);
-    bBus.g.gain.setValueAtTime(0.2, 8 * barOut);
-    bBus.g.gain.linearRampToValueAtTime(0.78, 16 * barOut);
-    bBus.g.gain.setValueAtTime(0.84, 16 * barOut);
-    for (let bar = 0; bar < 24; bar += 8) {
-      playGrain(offline, sourceA, aBus.hp, bar * barOut, phraseA, barA * 8, rateA, 1);
-    }
-    for (let bar = 8; bar < 32; bar += 8) {
-      playGrain(offline, sourceB, bBus.hp, bar * barOut, phraseB, barB * 8, rateB, 1);
-    }
-    wet.gain.setValueAtTime(0.12, 0);
-    wet.gain.setValueAtTime(0.12, 24 * barOut);
-    wet.gain.linearRampToValueAtTime(0.42, 28 * barOut);
+    aBus.hp.frequency.exponentialRampToValueAtTime(260, 17 * barOut);
+    aBus.g.gain.setValueAtTime(0.84, 0);
+    aBus.g.gain.setValueAtTime(0.84, 20 * barOut);
+    aBus.g.gain.linearRampToValueAtTime(0, 24 * barOut);
+    bBus.g.gain.setValueAtTime(0, 0);
+    bBus.g.gain.setValueAtTime(0.18, 8 * barOut);
+    bBus.g.gain.linearRampToValueAtTime(0.86, 16 * barOut);
+    playRide(offline, sourceA, aBus.hp, 0, startA, 24, barA, rateA, 1);
+    playRide(offline, sourceB, bBus.hp, 8 * barOut, startB, 24, barB, rateB, 1);
+    wet.gain.setValueAtTime(0.1, 0);
+    wet.gain.setValueAtTime(0.1, 20 * barOut);
+    wet.gain.linearRampToValueAtTime(0.38, 24 * barOut);
   } else {
-    const aBus = bus(offline, 320);
-    aBus.hp.frequency.value = 320;
+    const aBus = bus(offline, 300);
+    aBus.hp.frequency.value = 300;
     aBus.g.connect(master);
     aBus.g.connect(delay);
-    aBus.g.gain.value = 0.72;
-    if (plan.pump && kicks.length) duckToKick(aBus.g, kicks, beat);
+    aBus.g.gain.value = 0.7;
+    if (plan.pump && kicks.length) duckToKick(aBus.g, kicks, beat, 0.7);
 
-    for (let bar = 4; bar < 8; bar += 2) {
-      playGrain(offline, sourceA, aBus.hp, bar * barOut, hookA, barA / 2, rateA, 0.55);
-    }
+    playRide(offline, sourceA, aBus.hp, 4 * barOut, startA, 4, barA, rateA, 0.42);
     const sixA = barA / 16;
     const sixOut = barOut / 16;
     for (let i = 0; i < 8; i++) {
-      playGrain(offline, sourceA, aBus.hp, 8 * barOut - barOut + i * sixOut, hookA, sixA, rateA, 0.85);
+      playGrain(offline, sourceA, aBus.hp, 8 * barOut - barOut + i * sixOut, startA, sixA, rateA, 0.8);
     }
-    for (let bar = 8; bar < 24; bar += 8) {
-      playGrain(offline, sourceA, aBus.hp, bar * barOut, phraseA, barA * 8, rateA, 0.8);
-    }
-    const rev = reverseSlice(offline, sourceA, hookA, barA / 2);
-    playGrain(offline, rev, aBus.hp, 24 * barOut, 0, rev.duration, 1, 0.65);
-    wet.gain.setValueAtTime(0.16, 24 * barOut);
-    wet.gain.linearRampToValueAtTime(0.4, 26 * barOut);
-    wet.gain.linearRampToValueAtTime(0.16, 28 * barOut);
-    for (let bar = 28; bar < 32; bar += 4) {
-      playGrain(offline, sourceA, aBus.hp, bar * barOut, hookA, barA * 4, rateA, 0.7);
-    }
+    playRide(offline, sourceA, aBus.hp, 8 * barOut, startA, 16, barA, rateA, 0.78);
+    const rev = reverseSlice(offline, sourceA, startA, barA / 2);
+    playGrain(offline, rev, aBus.hp, 24 * barOut, 0, rev.duration, 1, 0.6);
+    wet.gain.setValueAtTime(0.14, 24 * barOut);
+    wet.gain.linearRampToValueAtTime(0.36, 26 * barOut);
+    wet.gain.linearRampToValueAtTime(0.14, 28 * barOut);
+    playRide(offline, sourceA, aBus.hp, 28 * barOut, startA, 4, barA, rateA, 0.72);
 
     if (sourceB && job === "both") {
       const bBus = bus(offline, 300);
       bBus.g.connect(master);
       bBus.g.connect(delay);
-      bBus.g.gain.value = 0.68;
-      if (plan.pump && kicks.length) duckToKick(bBus.g, kicks, beat);
-      for (let bar = 16; bar < 32; bar += 8) {
-        playGrain(offline, sourceB, bBus.hp, bar * barOut, phraseB, barB * 8, rateB, 0.78);
-      }
+      bBus.g.gain.value = 0.66;
+      if (plan.pump && kicks.length) duckToKick(bBus.g, kicks, beat, 0.66);
+      playRide(offline, sourceB, bBus.hp, 16 * barOut, startB, 16, barB, rateB, 0.8);
     }
   }
 

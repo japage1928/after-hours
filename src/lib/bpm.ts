@@ -95,3 +95,62 @@ export function detectBpm(buffer: AudioBuffer): BpmGuess {
 
   return { bpm, offset, peaks: waveformPeaks(buffer) };
 }
+
+export type TrackAnalysis = {
+  bars: number;
+  dropBar: number;
+  peakSec: number;
+  energy: number[];
+};
+
+function mean(xs: number[]) {
+  if (!xs.length) return 0;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+export function analyzeTrack(buffer: AudioBuffer, bpm: number, offset: number): TrackAnalysis {
+  const bar = (60 / Math.max(70, bpm)) * 4;
+  const data = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const start = Math.max(0, offset);
+  const bars = Math.max(1, Math.floor((buffer.duration - start) / bar));
+  const energy: number[] = [];
+  for (let i = 0; i < bars; i++) {
+    const a = Math.floor((start + i * bar) * sr);
+    const b = Math.min(data.length, Math.floor((start + (i + 1) * bar) * sr));
+    let s = 0;
+    let n = 0;
+    for (let j = a; j < b; j += 32) {
+      const v = data[j] ?? 0;
+      s += v * v;
+      n += 1;
+    }
+    energy.push(n ? Math.sqrt(s / n) : 0);
+  }
+  let dropBar = Math.min(16, Math.max(8, Math.floor(bars * 0.3)));
+  let bestJump = -1;
+  for (let i = 4; i < Math.max(5, bars - 8); i += 4) {
+    const before = mean(energy.slice(Math.max(0, i - 4), i));
+    const after = mean(energy.slice(i, Math.min(bars, i + 4)));
+    const jump = after - before;
+    if (jump > bestJump) {
+      bestJump = jump;
+      dropBar = i;
+    }
+  }
+  let peakI = Math.min(dropBar, Math.max(0, bars - 8));
+  let peakR = -1;
+  for (let i = 0; i <= Math.max(0, bars - 8); i += 4) {
+    const s = mean(energy.slice(i, i + 8));
+    if (s > peakR) {
+      peakR = s;
+      peakI = i;
+    }
+  }
+  return {
+    bars,
+    dropBar,
+    peakSec: start + peakI * bar,
+    energy,
+  };
+}

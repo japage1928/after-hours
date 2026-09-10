@@ -119,6 +119,10 @@ export class DjEngine {
     return this.decks[id].info;
   }
 
+  rawBuffer(id: DeckId): AudioBuffer | null {
+    return this.decks[id].buffer;
+  }
+
   deckTime(id: DeckId): number {
     if (this.remixPlaying && this.ctx) {
       return Math.min(this.remixDuration, Math.max(0, this.ctx.currentTime - this.remixOrigin));

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { detectBpm } from "@/lib/bpm";
+import { detectBpm, analyzeTrack } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixJob, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
@@ -231,6 +231,15 @@ export const useBooth = create<BoothState>((set, get) => ({
     const verb =
       job === "remix" ? "Producing remix" : job === "both" ? "Producing mash + remix" : "Producing mashup";
     set({ status: "planning", statusText: `${verb}…`, error: null, cue: null });
+    const bufA = djEngine.rawBuffer("a");
+    const bufB = job === "remix" ? null : djEngine.rawBuffer("b");
+    const anA = bufA ? analyzeTrack(bufA, deckA.bpm, deckA.offset) : null;
+    const anB = bufB ? analyzeTrack(bufB, deckB.bpm, deckB.offset) : null;
+    const compact = (xs: number[]) =>
+      xs
+        .slice(0, 24)
+        .map((x) => x.toFixed(2))
+        .join(",");
     const input = {
       job,
       nameA: deckA.name,
@@ -240,6 +249,12 @@ export const useBooth = create<BoothState>((set, get) => ({
       durationA: deckA.duration,
       durationB: job === "remix" ? 0 : deckB.duration,
       prompt: prompt.trim(),
+      energyA: anA ? compact(anA.energy) : "",
+      energyB: anB ? compact(anB.energy) : "",
+      peakASec: anA?.peakSec ?? 0,
+      peakBSec: anB?.peakSec ?? 0,
+      dropBarA: anA?.dropBar ?? 16,
+      dropBarB: anB?.dropBar ?? 16,
     };
     let plan: MixPlan = fallbackPlan(input);
     try {
