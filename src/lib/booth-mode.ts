@@ -148,31 +148,31 @@ export function safeNextPath(raw: string | null | undefined): string {
       ? new URL(raw, "http://local")
       : new URL(raw, "http://local");
     const path = url.pathname;
-    if (
-      path === "/mashup" ||
-      path === "/remix" ||
-      path === "/settings" ||
-      path === "/projects" ||
-      path === "/profile" ||
-      path === "/account" ||
-      path === "/billing" ||
-      path === "/pricing" ||
-      path === "/admin"
-    ) {
-      return path;
-    }
-    // Legacy settings?tab=…
     if (path === "/settings") {
       const tab = url.searchParams.get("tab");
       if (
         tab === "projects" ||
         tab === "profile" ||
         tab === "account" ||
-        tab === "billing"
+        tab === "billing" ||
+        tab === "support"
       ) {
         return `/${tab}`;
       }
       return "/settings";
+    }
+    if (
+      path === "/mashup" ||
+      path === "/remix" ||
+      path === "/projects" ||
+      path === "/profile" ||
+      path === "/account" ||
+      path === "/billing" ||
+      path === "/support" ||
+      path === "/pricing" ||
+      path === "/admin"
+    ) {
+      return path;
     }
   } catch {
     /* ignore */

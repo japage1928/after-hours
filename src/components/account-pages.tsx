@@ -1,11 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   deleteMyAccount,
   listMyAuthProviders,
   updateMyProfile,
 } from "@/lib/account-api";
+import {
+  createSupportTicket,
+  listMySupportTickets,
+  type MySupportTicket,
+} from "@/lib/support-api";
+import {
+  MESSAGE_MAX,
+  SUPPORT_CATEGORY_LIST,
+  supportCategoryLabel,
+  type SupportCategory,
+} from "@/lib/support";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { authClient, authEnabled, signOut } from "@/lib/auth/client";
 import { UserButton } from "@/lib/auth/gates";
@@ -46,8 +58,8 @@ export function AccountShell({
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Account</h1>
           <p className="mt-2 text-sm text-muted">
-            Settings, projects, profile, billing — and a clear exit when you want
-            one.
+            Settings, projects, profile, billing, support — and a clear exit when
+            you want one.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -681,6 +693,142 @@ export function BillingPanel() {
 
       {message ? <p className="text-sm text-muted">{message}</p> : null}
       {error ? <p className="text-sm text-rec">{error}</p> : null}
+    </Panel>
+  );
+}
+
+export function SupportPanel() {
+  const { user } = useCurrentUserState();
+  const [category, setCategory] = useState<SupportCategory>("other");
+  const [message, setMessage] = useState("");
+  const [tickets, setTickets] = useState<MySupportTicket[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function refresh() {
+    if (!user || user.isDevFallback) {
+      setTickets([]);
+      return;
+    }
+    const rows = await listMySupportTickets();
+    setTickets(rows);
+  }
+
+  useEffect(() => {
+    void refresh().catch(() => setTickets([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      if (user?.isDevFallback) {
+        throw new Error("Support needs a real signed-in account.");
+      }
+      await createSupportTicket({
+        data: { category, message: message.trim() },
+      });
+      setMessage("");
+      setNotice("Request sent. We’ll look at it from the After Hours admin desk.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send request");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="Support"
+      blurb="Tell us what broke — login, billing, AI DJ remix, or beats × lyrics mashup. No screenshots in this first version."
+    >
+      {user?.isDevFallback ? (
+        <p className="text-sm text-muted">
+          Support needs a real signed-in account.
+        </p>
+      ) : (
+        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted">Category</span>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as SupportCategory)}
+              className="h-11 rounded-md bg-surface-2 px-3 text-fg shadow-border outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {SUPPORT_CATEGORY_LIST.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-subtle">
+              {SUPPORT_CATEGORY_LIST.find((item) => item.id === category)?.hint}
+            </span>
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted">What happened?</span>
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={MESSAGE_MAX}
+              placeholder="A short note is enough — what you tried, and what you expected."
+              required
+            />
+            <span className="text-xs text-subtle">
+              {message.trim().length}/{MESSAGE_MAX}
+            </span>
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={busy || message.trim().length < 10}>
+              {busy ? "Sending…" : "Send request"}
+            </Button>
+            {notice ? <p className="text-sm text-muted">{notice}</p> : null}
+            {error ? <p className="text-sm text-rec">{error}</p> : null}
+          </div>
+        </form>
+      )}
+
+      <div className="flex flex-col gap-3 border-t border-line pt-5">
+        <p className="text-xs font-medium tracking-widest text-muted uppercase">
+          Your requests
+        </p>
+        {!tickets ? (
+          <p className="text-sm text-muted">Loading…</p>
+        ) : tickets.length === 0 ? (
+          <p className="text-sm text-muted">
+            Nothing submitted yet. Use the form above when something’s stuck.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {tickets.map((ticket) => (
+              <li
+                key={ticket.id}
+                className="rounded-xl bg-surface-2 px-3 py-3 shadow-border"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-medium text-fg">
+                    {supportCategoryLabel(ticket.category)}
+                  </p>
+                  <p className="text-xs tracking-wide text-subtle uppercase">
+                    {ticket.status}
+                  </p>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-muted">
+                  {ticket.message}
+                </p>
+                <p className="mt-2 text-xs text-subtle">
+                  {new Date(ticket.createdAt).toLocaleString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Panel>
   );
 }

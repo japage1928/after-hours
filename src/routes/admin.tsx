@@ -11,16 +11,20 @@ import {
   adminResolvePayment,
   adminSetPassword,
   adminSyncSubscription,
+  adminUpdateTicket,
   getAdminBootstrap,
   listAdminUsers,
   listAdminAudit,
+  listAdminTickets,
   listStuckPayments,
   listSubscriptions,
   type AdminAuditRow,
+  type AdminTicketRow,
   type AdminUserRow,
 } from "@/lib/auth/admin-api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { formatUsd } from "@/lib/billing/plans";
+import { ADMIN_TICKET_PAGE_SIZE, supportCategoryLabel } from "@/lib/support";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -31,17 +35,30 @@ type SubRow = Awaited<ReturnType<typeof listSubscriptions>>[number];
 
 function AdminPage() {
   const { user, isPending } = useCurrentUserState();
-  const [tab, setTab] = useState<"users" | "subs" | "payments" | "audit">("users");
+  const [tab, setTab] = useState<
+    "users" | "subs" | "payments" | "tickets" | "audit"
+  >("users");
   const [query, setQuery] = useState("");
   const [audit, setAudit] = useState<AdminAuditRow[] | null>(null);
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
   const [subs, setSubs] = useState<SubRow[] | null>(null);
   const [payments, setPayments] = useState<StuckPayment[] | null>(null);
+  const [tickets, setTickets] = useState<AdminTicketRow[] | null>(null);
+  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "resolved">(
+    "open",
+  );
+  const [ticketOffset, setTicketOffset] = useState(0);
+  const [ticketHasMore, setTicketHasMore] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<AdminTicketRow | null>(
+    null,
+  );
+  const [ticketNote, setTicketNote] = useState("");
   const [admins, setAdmins] = useState<string[]>([]);
   const [stats, setStats] = useState({
     users: 0,
     stuckPayments: 0,
     activeSubs: 0,
+    openTickets: 0,
   });
   const [stripeReady, setStripeReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +68,14 @@ function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
 
   const reload = useCallback(async () => {
-    const [boot, rows, subRows, stuck, auditRows] = await Promise.all([
+    const [boot, rows, subRows, stuck, ticketPage, auditRows] = await Promise.all([
       getAdminBootstrap(),
       listAdminUsers(),
       listSubscriptions(),
       listStuckPayments(),
+      listAdminTickets({
+        data: { status: ticketFilter, offset: ticketOffset },
+      }),
       listAdminAudit(),
     ]);
     setAdmins(boot.admins);
@@ -64,8 +84,13 @@ function AdminPage() {
     setUsers(rows);
     setSubs(subRows);
     setPayments(stuck);
+    setTickets(ticketPage.tickets);
+    setTicketHasMore(ticketPage.hasMore);
     setAudit(auditRows);
-  }, []);
+    setSelectedTicket((cur) =>
+      cur ? (ticketPage.tickets.find((t) => t.id === cur.id) ?? null) : null,
+    );
+  }, [ticketFilter, ticketOffset]);
 
   useEffect(() => {
     if (isPending || !user || !isAdminEmail(user.primaryEmail)) return;
@@ -145,11 +170,12 @@ function AdminPage() {
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           ["Users", stats.users],
           ["Active subs", stats.activeSubs],
           ["Stuck payments", stats.stuckPayments],
+          ["Open tickets", stats.openTickets],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl bg-surface p-4 shadow-border">
             <p className="text-xs tracking-wide text-subtle uppercase">{label}</p>
@@ -164,6 +190,7 @@ function AdminPage() {
             ["users", "Accounts"],
             ["subs", "Subscriptions"],
             ["payments", "Stuck payments"],
+            ["tickets", "Tickets"],
             ["audit", "Audit log"],
           ] as const
         ).map(([id, label]) => (
@@ -583,6 +610,189 @@ function AdminPage() {
               ))}
             </ul>
           )}
+        </section>
+      ) : null}
+
+      {tab === "tickets" ? (
+        <section className="rounded-2xl bg-surface p-5 shadow-border">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl text-fg">Support tickets</h2>
+              <p className="mt-1 text-sm text-muted">
+                Open a request, add a note, mark it resolved. Users submit these
+                from Account → Support.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["open", "Open"],
+                  ["resolved", "Resolved"],
+                  ["all", "All"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={ticketFilter === id ? "default" : "secondary"}
+                  onClick={() => {
+                    setTicketOffset(0);
+                    setTicketFilter(id);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {!tickets ? (
+            <p className="mt-4 text-sm text-muted">Loading tickets…</p>
+          ) : tickets.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">
+              {ticketFilter === "open"
+                ? "No open tickets."
+                : "Nothing in this filter."}
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-line">
+              {tickets
+                .map((t) => (
+                  <li key={t.id} className="flex flex-col gap-3 py-4">
+                    <button
+                      type="button"
+                      className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+                      onClick={() => {
+                        setSelectedTicket((cur) =>
+                          cur?.id === t.id ? null : t,
+                        );
+                        setTicketNote(t.adminNote ?? "");
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-fg">
+                          {t.email ?? t.userId} · {supportCategoryLabel(t.category)}
+                        </p>
+                        <p className="truncate text-sm text-muted">{t.message}</p>
+                      </div>
+                      <div className="text-right text-xs text-subtle">
+                        <p className="uppercase tracking-wide">{t.status}</p>
+                        <p>{new Date(t.createdAt).toLocaleString()}</p>
+                      </div>
+                    </button>
+                    {selectedTicket?.id === t.id ? (
+                      <div className="flex flex-col gap-3 rounded-xl bg-bg p-4">
+                        <p className="whitespace-pre-wrap text-sm text-fg">
+                          {t.message}
+                        </p>
+                        <p className="text-xs text-subtle">
+                          {t.userName ? `${t.userName} · ` : ""}
+                          {t.email ?? "no email"} · {t.userId}
+                        </p>
+                        <label className="flex flex-col gap-1.5 text-sm">
+                          <span className="text-muted">Admin note (internal)</span>
+                          <textarea
+                            value={ticketNote}
+                            onChange={(e) => setTicketNote(e.target.value)}
+                            maxLength={1000}
+                            rows={3}
+                            className="rounded-md bg-surface px-3 py-2 text-fg shadow-border outline-none focus:ring-2 focus:ring-accent/40"
+                          />
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(
+                                () =>
+                                  adminUpdateTicket({
+                                    data: {
+                                      ticketId: t.id,
+                                      adminNote: ticketNote,
+                                    },
+                                  }),
+                                "Note saved",
+                              )
+                            }
+                          >
+                            Save note
+                          </Button>
+                          {t.status === "open" ? (
+                            <Button
+                              size="sm"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(
+                                  () =>
+                                    adminUpdateTicket({
+                                      data: {
+                                        ticketId: t.id,
+                                        status: "resolved",
+                                        adminNote: ticketNote,
+                                      },
+                                    }),
+                                  "Ticket resolved",
+                                )
+                              }
+                            >
+                              Mark resolved
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(
+                                  () =>
+                                    adminUpdateTicket({
+                                      data: {
+                                        ticketId: t.id,
+                                        status: "open",
+                                        adminNote: ticketNote,
+                                      },
+                                    }),
+                                  "Ticket reopened",
+                                )
+                              }
+                            >
+                              Reopen
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+            </ul>
+          )}
+          {ticketOffset > 0 || ticketHasMore ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || ticketOffset === 0}
+                onClick={() =>
+                  setTicketOffset((n) =>
+                    Math.max(0, n - ADMIN_TICKET_PAGE_SIZE),
+                  )
+                }
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || !ticketHasMore}
+                onClick={() =>
+                  setTicketOffset((n) => n + ADMIN_TICKET_PAGE_SIZE)
+                }
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
