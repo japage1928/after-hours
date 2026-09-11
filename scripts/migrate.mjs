@@ -17,11 +17,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
+import { resolveDatabaseUrl } from "../src/lib/database-url.ts";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = resolveDatabaseUrl(process.env);
 if (!databaseUrl) {
   console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
+    "[migrate] DATABASE_URL / POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
   );
   process.exit(0);
 }
