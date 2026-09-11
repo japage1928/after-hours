@@ -298,7 +298,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
 
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
         {mode === "generate"
-          ? "Full-song AI generation. Quality is ACE-Step, not Suno — we label the engine honestly. Your first two AI songs this month are included."
+          ? "Full-song AI generation. Quality is ACE-Step via Replicate, not Suno. Your first two AI songs this month are included."
           : mode === "remix"
             ? "Upload stays on your device. ACE-Step writes a new production when it’s configured; otherwise we bounce a labeled local drum-bed so you still leave with a listen."
             : "Beats on the left, lyrics/vocals on the right — both tracks you own. Mashup never spends AI quota. On iPhone: pick M4A or MP3 from Files."}

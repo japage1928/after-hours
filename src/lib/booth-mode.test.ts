@@ -19,6 +19,8 @@ describe("booth modes", () => {
     assert.equal(safeNextPath("/generate"), "/generate");
     assert.equal(safeNextPath("/remix"), "/remix");
     assert.equal(safeNextPath("/help"), "/help");
-    assert.equal(safeNextPath("https://evil.example/phish"), "/");
+    assert.equal(safeNextPath(""), "/generate");
+    assert.equal(safeNextPath(undefined), "/generate");
+    assert.equal(safeNextPath("https://evil.example/phish"), "/generate");
   });
 });

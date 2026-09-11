@@ -43,6 +43,7 @@ export function LandingPage() {
             ) : (
               <Link
                 to="/login"
+                search={{ next: "/generate" }}
                 className="rounded-md bg-surface-2/90 px-3 py-2 text-sm text-fg shadow-border backdrop-blur-sm transition-colors hover:bg-surface"
               >
                 Sign in
@@ -57,10 +58,16 @@ export function LandingPage() {
               After Hours
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
-              AI song, remix, or mashup in the browser. Generate a full track
-              from a prompt, rebuild one you own onto a new beat, or mash beats
-              with lyrics — then play and download.
+              Generate an AI song in the browser — prompt, play, download.
+              Powered by ACE-Step via Replicate. Two songs free this month.
             </p>
+            <Link
+              to={user ? "/generate" : "/login"}
+              search={user ? undefined : { next: "/generate" }}
+              className="mt-6 inline-flex h-12 items-center rounded-md bg-accent px-5 text-base font-medium text-accent-fg shadow-border transition-[transform,background-color] hover:brightness-110 active:scale-[0.98]"
+            >
+              Generate a song →
+            </Link>
           </div>
 
           <div className="landing-rise-delay grid max-w-4xl gap-3 sm:grid-cols-3 sm:gap-4">

@@ -3,10 +3,25 @@ import { describe, it } from "node:test";
 import { engineLabel, humanizeStudioError } from "./studio-errors.ts";
 
 describe("humanizeStudioError", () => {
+  it("explains a rejected Replicate token separately from a missing one", () => {
+    assert.match(
+      humanizeStudioError(
+        "REPLICATE_API_TOKEN was rejected. Check the token on this deploy.",
+      ),
+      /rejected/i,
+    );
+    assert.doesNotMatch(
+      humanizeStudioError(
+        "REPLICATE_API_TOKEN was rejected. Check the token on this deploy.",
+      ),
+      /isn’t set up/,
+    );
+  });
+
   it("explains missing ACE-Step config", () => {
     assert.match(
       humanizeStudioError("ACE-Step is not configured on this deploy."),
-      /ACE_STEP_BASE_URL/,
+      /REPLICATE_API_TOKEN/,
     );
   });
 
@@ -34,6 +49,17 @@ describe("engineLabel", () => {
   });
 
   it("says when ACE-Step is missing", () => {
-    assert.match(engineLabel({ aceStep: false, xai: true }), /not configured/i);
+    assert.match(engineLabel({ aceStep: false, xai: true }), /REPLICATE_API_TOKEN/i);
+  });
+
+  it("labels Replicate honestly", () => {
+    assert.match(
+      engineLabel({ aceStep: true, xai: false, backend: "replicate" }),
+      /Replicate/,
+    );
+    assert.doesNotMatch(
+      engineLabel({ aceStep: true, xai: false, backend: "replicate" }),
+      /Suno/i,
+    );
   });
 });

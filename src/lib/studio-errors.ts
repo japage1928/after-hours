@@ -6,11 +6,21 @@ export function humanizeStudioError(raw: string): string {
   const lower = t.toLowerCase();
 
   if (
+    lower.includes("replicate_api_token was rejected") ||
+    (lower.includes("401") && lower.includes("replicate"))
+  ) {
+    return "Replicate rejected the API token. Check REPLICATE_API_TOKEN on this deploy.";
+  }
+  if (lower.includes("replicate billing") || lower.includes("payment method")) {
+    return "Replicate billing needs a payment method. Add one at replicate.com, then try again.";
+  }
+  if (
     lower.includes("not configured") ||
     lower.includes("ace_step_base_url") ||
+    (lower.includes("replicate_api_token") && lower.includes("set ")) ||
     lower.includes("ace-step is not configured")
   ) {
-    return "AI music generation isn’t set up on this deploy. After Hours needs ACE_STEP_BASE_URL pointing at an ACE-Step host.";
+    return "AI music generation isn’t set up on this deploy. Add REPLICATE_API_TOKEN on Vercel Production (ACE-Step via Replicate). ACE_STEP_BASE_URL is an optional self-hosted override.";
   }
   if (
     lower.includes("free tier") ||
@@ -67,11 +77,14 @@ export function humanizeStudioError(raw: string): string {
 export function engineLabel(opts: {
   aceStep: boolean;
   xai: boolean;
+  backend?: "host" | "replicate" | "none";
 }): string {
   if (opts.aceStep) {
-    return opts.xai
-      ? "AI generation powered by ACE-Step (prompts via xAI)"
-      : "AI generation powered by ACE-Step";
+    const engine =
+      opts.backend === "host"
+        ? "AI generation powered by ACE-Step (self-hosted)"
+        : "AI generation powered by ACE-Step via Replicate";
+    return opts.xai ? `${engine}; prompts via xAI` : engine;
   }
-  return "ACE-Step is not configured — Generate needs an ACE-Step host. Mashup and a labeled local remix preview still work in this browser.";
+  return "ACE-Step is not configured — add REPLICATE_API_TOKEN on Vercel (or ACE_STEP_BASE_URL).";
 }

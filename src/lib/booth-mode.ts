@@ -35,7 +35,7 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
     eyebrow: "AI generate",
     title: "Describe a song. Get a song.",
     blurb:
-      "Prompt, pick a style, optionally paste lyrics. After Hours generates a full track you can play and download — powered by ACE-Step, not a hidden Write tab.",
+      "Prompt, pick a style, optionally paste lyrics. After Hours generates a full track you can play and download — ACE-Step via Replicate, labeled honestly. Not Suno.",
     actionIdle: "Write a prompt first",
     actionBusy: "Generating your song…",
     briefLabel: "Song prompt",
@@ -157,7 +157,7 @@ export function isBoothMode(value: string): value is BoothMode {
 
 /** Safe post-login redirect targets. */
 export function safeNextPath(raw: string | null | undefined): string {
-  if (!raw) return "/";
+  if (!raw) return "/generate";
   try {
     const url = raw.startsWith("/")
       ? new URL(raw, "http://local")
@@ -193,5 +193,5 @@ export function safeNextPath(raw: string | null | undefined): string {
   } catch {
     /* ignore */
   }
-  return "/";
+  return "/generate";
 }

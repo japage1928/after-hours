@@ -1,92 +1,66 @@
 # After Hours
 
-Creator booth with three modes:
+**Generate an AI song in the browser** — prompt, play, download. That’s the product.
 
-1. **Generate** — describe a song (prompt / style / optional lyrics) and get an AI-generated full track you can play and download
-2. **Remix** — upload a song you own; AI rebuilds it onto a new beat/style (EDM, dubstep, rock, country, …)
-3. **Mashup** — two owned tracks: beats from one, lyrics/vocals from the other, bounced into one listen
+Remix and mashup still exist in the booth; mashup work is deferred.
 
-Auth, billing, **device library**, and admin sit around that booth. This is not a DJ-crossfade demo and not a hidden Write tab.
-
-Generation is **ACE-Step** (not Suno). The booth labels the engine honestly.
+Generation is **ACE-Step via Replicate** (not Suno). Optional self-hosted override: `ACE_STEP_BASE_URL`.
 
 ## Session one
 
-Cold signup → pick Generate, Remix, or Mashup → play + download before you leave.
+Cold signup → Generate booth → prompt/style → generate → play + download.
 
-- **Generate** needs `ACE_STEP_BASE_URL`. There is no fake song.
-- **Remix** uses ACE-Step when configured. If it isn’t, the primary remix still finishes on a **labeled local drum-bed** (not ACE-Step, no AI quota).
-- **Mashup** always runs in the browser. Two owned files, or lyrics + a labeled local preview beat.
+- **Generate** needs `REPLICATE_API_TOKEN` on Vercel (or `ACE_STEP_BASE_URL`). There is no fake song.
+- Free accounts get **2 AI generates per month**. Paywall after those jobs, then Stripe Checkout.
+- Finished generates save to **Library** (`/projects`).
 
-Free accounts get **2 AI generates/remixes per month**. Mashups don’t spend that quota. The paywall appears after those jobs are used — not before the first track. Finished audio saves to **Library** (`/projects`) with Remix this / Try another style.
-
-Need help? `/help` emails the owner. Ticket UI can land separately.
-
-## How each mode works
-
-### Generate (`/generate`)
+## How Generate works (`/generate`)
 
 1. Prompt (required), style chips, length (~30 / ~60 / ~90s), optional lyrics, optional instrumental.
 2. **xAI** (if `XAI_API_KEY` is set) translates that into an ACE-Step caption + lyrics. Otherwise a local brief is used.
-3. **ACE-Step** (`ACE_STEP_BASE_URL`) generates the audio.
-4. Play + download (original ACE-Step payload when available).
-
-Generate **requires** ACE-Step. There is no fake song if the model isn’t configured.
-
-### Remix (`/remix`)
-
-1. Upload one owned track (M4A/MP3/WAV, under 40 MB).
-2. Pick a style + optional brief.
-3. xAI → ACE-Step instrumental bed matching the song length.
-4. Client **bounce**: high-pass the original over the new bed, beat-matched, full duration — a real listen, not an intro→tease→drop DJ show.
-5. Play + download WAV.
-
-If ACE-Step isn’t configured, Remix still finishes with a **labeled local drum-bed preview** (not ACE-Step, no quota). You can also pick that path on purpose.
-
-### Mashup (`/mashup`)
-
-1. Load beats (A) and lyrics/vocals (B) you own.
-2. Bounce: time-stretch lyrics to the beat BPM, EQ-split (kick/bass vs vocal), 2-bar intro, then lock both.
-3. Play + download WAV. Runs on-device; does not spend AI quota. If you only have vocals, mash over a **labeled local preview beat**.
+3. **ACE-Step** generates the audio:
+   - Default: Replicate model `fishaudio/ace-step-1.5` using `REPLICATE_API_TOKEN`
+   - Override: `ACE_STEP_BASE_URL` (OpenAI-compat host) if set
+4. Play + download. Track is saved to the on-device library.
 
 ## Env vars
 
 | Var | Used for |
 | --- | --- |
-| `XAI_API_KEY` | Prompt → ACE-Step caption/lyrics (Generate + Remix). Optional; local briefs work without it. |
-| `ACE_STEP_BASE_URL` | ACE-Step host (no trailing slash). **Required** for Generate and AI Remix. |
-| `ACE_STEP_API_KEY` | Optional bearer token for that host. |
-| `ACE_STEP_MODEL` | Default `acestep/ACE-Step-v1.5`. |
+| `REPLICATE_API_TOKEN` | **Required to go live.** ACE-Step via Replicate for Generate. |
+| `ACE_STEP_REPLICATE_MODEL` | Optional. Default `fishaudio/ace-step-1.5`. |
+| `ACE_STEP_BASE_URL` | Optional self-hosted ACE-Step host (used instead of Replicate if set). |
+| `ACE_STEP_API_KEY` / `ACE_STEP_MODEL` | Optional for the self-hosted host. |
+| `XAI_API_KEY` | Optional prompt translator; local briefs work without it. |
 | `DATABASE_URL` / `POSTGRES_URL` | Supabase Postgres for Better Auth + billing. |
 | `VITE_AUTH_ENABLED` | `true` on Vercel so sign-in is on. |
 | `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` | Auth. |
-| `STRIPE_*` | Checkout + portal. Not rewritten in this product pass. |
+| `STRIPE_*` | Checkout + portal (already set in production). |
+
+**To go live:** set `REPLICATE_API_TOKEN` on Vercel Production (Stripe is already set). Mashup deferred.
 
 ## Gaps vs Suno
 
-- Engine is ACE-Step, not Suno — different model, no custom personas, no social feed, no stems marketplace.
-- Remix does not do neural stem split or audio-to-audio “cover”; it generates a new bed and bounces your source on top.
-- Mashup is beat-match + EQ, not lyric-aware stem isolation.
-- No TikTok login.
+- Engine is ACE-Step via Replicate, not Suno — different model, no custom personas, no social feed, no stems marketplace.
+- Remix (if used) shares the same ACE-Step engine; it is not neural stem split.
+- Mashup is deferred.
+- No TikTok / Facebook login.
 
 ## Run locally
 
 ```bash
 npm install
-export XAI_API_KEY=your_key
-# export ACE_STEP_BASE_URL=https://your-ace-step-host
+export REPLICATE_API_TOKEN=r8_...
 npm run dev
 ```
 
-Open the app, sign in, pick **Generate**, **Remix**, or **Mashup**.
-
-On iPhone, pick an **M4A** or **MP3** from Files, Downloads, or Voice Memos. Apple Music catalog tracks cannot be uploaded. Keep each file under 40 MB.
+Open the app, sign in, **Generate**.
 
 Without `DATABASE_URL`, auth/session tables run on embedded PGLite. With Supabase connected, Better Auth persists to your project Postgres.
 
 ## Stack
 
-TanStack Start, Vite, Tailwind v4, Zustand, Web Audio, Better Auth → **Supabase Postgres**, Stripe, ACE-Step, xAI.
+TanStack Start, Vite, Tailwind v4, Zustand, Web Audio, Better Auth → **Supabase Postgres**, Stripe, ACE-Step (Replicate), xAI.
 
 ## Deploy: Vercel + Supabase
 
@@ -101,7 +75,7 @@ Primary path. Supabase project **`after-hours`** (`qrhnoypojhkjkmzlhjfl`, `us-ea
 
 1. Import this GitHub repo into [Vercel](https://vercel.com/new).
 2. Preferred: Vercel project → **Integrations → Supabase** → link **after-hours**.
-3. Or set env vars manually (`DATABASE_URL`, `XAI_API_KEY`, `ACE_STEP_*`, `VITE_AUTH_ENABLED=true`, Stripe keys).
+3. Or set env vars manually (`REPLICATE_API_TOKEN`, `DATABASE_URL`, `VITE_AUTH_ENABLED=true`, Stripe keys). Optional: `XAI_API_KEY`, `ACE_STEP_BASE_URL`.
 4. Redeploy. Build runs `db:migrate` against Supabase.
 
 Project URL: `https://qrhnoypojhkjkmzlhjfl.supabase.co`

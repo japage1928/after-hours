@@ -11,7 +11,7 @@ import { GROOVE_STYLES, type GrooveStyle } from "@/lib/ai-beat";
 import { fallbackGenerateJob } from "@/lib/generate-job";
 
 /**
- * Suno-like generate: prompt + style + optional lyrics → ACE-Step job.
+ * Prompt + style + optional lyrics → ACE-Step job (Replicate by default).
  * The LLM translates intent; ACE-Step performs the song.
  */
 

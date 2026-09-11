@@ -129,10 +129,12 @@ export class StudioPlayer {
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
     src.connect(this.master);
-    const off = Math.max(
-      0,
-      Math.min(this.buffer.duration - 0.05, offset ?? this.startOffset),
-    );
+    const offRaw = offset ?? this.startOffset;
+    const dur = this.buffer.duration;
+    const atEnd = offRaw >= dur - 0.08;
+    const off = atEnd
+      ? 0
+      : Math.max(0, Math.min(Math.max(0, dur - 0.05), offRaw));
     const startAt = this.ctx.currentTime;
     try {
       src.start(startAt, off);

@@ -16,8 +16,8 @@ function HelpPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Need help?</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Three booths: Generate an AI song, remix one you own, or mash beats
-            with lyrics. Generation is ACE-Step — not Suno.
+            Generate an AI song in the browser. ACE-Step via Replicate — not
+            Suno.
           </p>
         </div>
         <Button asChild variant="secondary">
@@ -33,8 +33,9 @@ function HelpPage() {
               Generate
             </Link>
             {" — "}
-            prompt + style, then play and download. Needs ACE-Step on this
-            deploy. Uses free AI quota.
+            prompt + style, then play and download. Needs{" "}
+            <span className="font-mono text-fg">REPLICATE_API_TOKEN</span> on
+            this deploy. Uses free AI quota (2 / month).
           </li>
           <li>
             <Link to="/remix" className="font-medium text-fg underline-offset-4 hover:underline">

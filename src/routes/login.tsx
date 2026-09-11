@@ -173,8 +173,8 @@ function LoginPage() {
             After Hours
           </h1>
           <p className="mt-4 max-w-md text-base text-muted sm:text-lg">
-            Sign up, then finish an AI song, remix, or mashup in this visit —
-            play and download before you leave.
+            Sign up, then generate an AI song in this visit — play and download
+            before you leave.
           </p>
         </div>
 
@@ -188,8 +188,7 @@ function LoginPage() {
                 {mode === "signup" ? "Create account" : "Welcome back"}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Two AI songs this month, mashups included. You’ll land in the
-                booth you picked.
+                Two AI generates this month. You’ll open the Generate booth next.
               </p>
             </div>
             {mode === "signup" ? (
