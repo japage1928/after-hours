@@ -33,8 +33,11 @@ export const Route = createFileRoute("/api/audio-ticket")({
           const tokenHash = createHash("sha256").update(token).digest("hex");
           const sql = await getSql();
 
-          await sql.query("delete from audio_tickets where expires_at <= now() or (user_id = $1 and created_at < now() - interval '10 minutes')", [session.user.id]);
-          const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+          await sql.query(
+            "delete from audio_tickets where expires_at <= now() or (user_id = $1 and created_at < now() - interval '30 minutes')",
+            [session.user.id],
+          );
+          const expiresAt = new Date(Date.now() + 20 * 60_000).toISOString();
           await sql.query(
             "insert into audio_tickets(token_hash,user_id,expires_at) values($1,$2,$3::timestamptz)",
             [tokenHash, session.user.id, expiresAt],
