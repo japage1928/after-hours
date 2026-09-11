@@ -42,6 +42,28 @@ if (!databaseUrl) {
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
+async function connectWithRetry(pool, attempts = 5) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await pool.connect();
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message ?? err);
+      const retryable =
+        err?.code === "XX000" ||
+        /max clients|EMAXCONN|too many clients|timeout|ECONNRESET/i.test(msg);
+      if (!retryable || i === attempts - 1) throw err;
+      const waitMs = 1000 * 2 ** i;
+      console.warn(
+        `[migrate] connection busy (${msg.slice(0, 80)}) — retry in ${waitMs}ms`,
+      );
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  throw lastErr;
+}
+
 async function main() {
   let entries;
   try {
@@ -56,8 +78,12 @@ async function main() {
     return;
   }
 
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
-  const client = await pool.connect();
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    connectionTimeoutMillis: 15_000,
+  });
+  const client = await connectWithRetry(pool);
   try {
     await client.query(
       "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
