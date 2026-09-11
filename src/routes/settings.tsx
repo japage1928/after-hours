@@ -34,7 +34,7 @@ function SettingsPage() {
           <p className="mt-2 text-sm text-muted">Your account and sign-out.</p>
         </div>
         <Button asChild variant="secondary">
-          <Link to="/">Booth</Link>
+          <Link to="/">Home</Link>
         </Button>
       </header>
 

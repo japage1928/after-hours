@@ -13,37 +13,10 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Visualizer } from "@/components/visualizer";
 import { AUDIO_FILE_ACCEPT } from "@/lib/audio-file";
+import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { djEngine, type DeckId } from "@/lib/dj-engine";
 import { useBooth } from "@/lib/dj-store";
 import { cn, formatTime } from "@/lib/utils";
-
-const TECHNIQUE_PRESETS: { id: string; label: string; prompt: string }[] = [
-  {
-    id: "bass_swap",
-    label: "Bass swap",
-    prompt: "Bass swap — kill lows on A while B’s kick takes over.",
-  },
-  {
-    id: "filter_blend",
-    label: "Filter blend",
-    prompt: "Filter sweep wash from A into B, phrase-aware.",
-  },
-  {
-    id: "power_cut",
-    label: "Power cut",
-    prompt: "Power cut — hard drop to B on the downbeat.",
-  },
-  {
-    id: "long_blend",
-    label: "Long blend",
-    prompt: "Long smooth house blend with EQ bass handoff.",
-  },
-  {
-    id: "echo_out",
-    label: "Echo out",
-    prompt: "Echo A out as B lands on the one.",
-  },
-];
 
 const TECHNIQUE_LABEL: Record<string, string> = {
   bass_swap: "Bass swap",
@@ -53,7 +26,8 @@ const TECHNIQUE_LABEL: Record<string, string> = {
   echo_out: "Echo out",
 };
 
-export function MashPanel() {
+export function MashPanel({ mode }: { mode: BoothMode }) {
+  const meta = BOOTH_MODES[mode];
   const hydrate = useBooth((s) => s.hydrate);
   const status = useBooth((s) => s.status);
   const statusText = useBooth((s) => s.statusText);
@@ -80,19 +54,20 @@ export function MashPanel() {
     void hydrate();
   }, [hydrate]);
 
+  useEffect(() => {
+    setPrompt(meta.defaultPrompt);
+  }, [mode, meta.defaultPrompt, setPrompt]);
+
   return (
     <div className="mx-auto flex max-w-3xl min-w-0 flex-col gap-4 px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:gap-5 md:px-8">
       <section className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border sm:gap-3 md:p-6">
         <p className="text-xs font-medium tracking-widest text-muted uppercase">
-          Remix DJ
+          {meta.eyebrow}
         </p>
         <h1 className="font-display text-[2rem] leading-none tracking-tight text-fg sm:text-4xl md:text-5xl">
-          Song A × Song B
+          {meta.title}
         </h1>
-        <p className="text-sm text-muted">
-          Load two tracks you have the right to mix. We beat-match, phrase-align,
-          and hand off with real DJ moves — bass swaps, filter blends, power cuts.
-        </p>
+        <p className="text-sm text-muted">{meta.blurb}</p>
       </section>
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
@@ -108,7 +83,7 @@ export function MashPanel() {
       <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            DJ brief
+            {meta.briefLabel}
           </p>
           <Button
             size="sm"
@@ -123,12 +98,12 @@ export function MashPanel() {
         <Textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="How should the handoff feel? Bass swap, filter wash, power cut…"
+          placeholder={meta.briefPlaceholder}
           maxLength={400}
           className="min-h-20"
         />
         <div className="flex flex-wrap gap-1.5">
-          {TECHNIQUE_PRESETS.map((t) => (
+          {meta.presets.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -169,10 +144,10 @@ export function MashPanel() {
         >
           <Shuffle />
           {status === "planning"
-            ? "Building the remix…"
+            ? meta.actionBusy
             : ready
-              ? `Remix ${deckA.name} × ${deckB.name}`
-              : "Load both songs"}
+              ? meta.actionReady(deckA.name, deckB.name)
+              : meta.actionIdle}
         </Button>
         <div className="flex flex-wrap items-center gap-2">
           {plan ? (
@@ -201,7 +176,7 @@ export function MashPanel() {
           {"  ·  "}
           B {formatTime(timeB)}
           {deckB.hasTrack ? ` · ${Math.round(deckB.bpm)} BPM` : ""}
-          {playing ? " · in the remix" : ""}
+          {playing ? (mode === "mashup" ? " · in the mash" : " · in the remix") : ""}
         </p>
       </section>
 
@@ -209,7 +184,7 @@ export function MashPanel() {
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
           <Button
             size="play"
-            aria-label={playing ? "Pause remix" : "Play remix"}
+            aria-label={playing ? `Pause ${meta.label}` : `Play ${meta.label}`}
             disabled={!ready}
             onClick={() => {
               if (playing) stopMix();
@@ -232,7 +207,11 @@ export function MashPanel() {
             <Square className="size-3.5 fill-current" />
           </Button>
           <p className="min-w-0 truncate text-sm text-muted">
-            {ready ? `${deckA.name} × ${deckB.name}` : "Song A × Song B"}
+            {ready
+              ? mode === "mashup"
+                ? `${deckA.name} × ${deckB.name}`
+                : `${deckA.name} → ${deckB.name}`
+              : meta.title}
           </p>
         </div>
         <div className="h-[env(safe-area-inset-bottom)]" />

@@ -97,6 +97,51 @@
     white-space: nowrap;
     border-width: 0;
   }
+
+  .landing-glow {
+    background:
+      radial-gradient(
+        ellipse 85% 55% at 18% 12%,
+        rgb(216 212 200 / 0.14),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 55% 40% at 88% 70%,
+        rgb(196 92 74 / 0.12),
+        transparent 55%
+      );
+    animation: landing-glow-shift 14s ease-in-out infinite alternate;
+  }
+
+  .landing-rise {
+    animation: landing-rise 0.9s ease-out both;
+  }
+
+  .landing-rise-delay {
+    animation: landing-rise 1s ease-out 0.12s both;
+  }
+}
+
+@keyframes landing-glow-shift {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.06) translate3d(1.5%, -1%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 1.25rem, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

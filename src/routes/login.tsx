@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import {
@@ -10,13 +11,21 @@ import {
   signIn,
   signInSocial,
 } from "@/lib/auth/client";
+import { safeNextPath } from "@/lib/booth-mode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
+const loginSearchSchema = z.object({
+  next: z.string().optional(),
+});
+
 export const Route = createFileRoute("/login")({
+  validateSearch: (search) => loginSearchSchema.parse(search),
   component: LoginPage,
 });
 
 function LoginPage() {
+  const { next } = Route.useSearch();
+  const dest = safeNextPath(next);
   const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [name, setName] = useState("");
@@ -26,8 +35,8 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   if (!isPending && user) {
-    const dest = isAdminEmail(user.primaryEmail) ? "/admin" : "/";
-    return <Navigate to={dest} />;
+    const home = isAdminEmail(user.primaryEmail) ? "/admin" : dest;
+    return <Navigate to={home} />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -49,7 +58,7 @@ function LoginPage() {
         });
         if (res.error) throw new Error(res.error.message || "Sign in failed");
       }
-      window.location.assign(isAdminEmail(email) ? "/admin" : "/");
+      window.location.assign(isAdminEmail(email) ? "/admin" : dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not authenticate");
       setBusy(false);
@@ -83,8 +92,7 @@ function LoginPage() {
             After Hours
           </h1>
           <p className="mt-4 max-w-md text-base text-muted sm:text-lg">
-            Load two tracks you own and mash them into one beat-matched remix.
-            Sign up to open the booth.
+            Mashup or remix — load two tracks you own and open the booth.
           </p>
         </div>
 
@@ -98,7 +106,7 @@ function LoginPage() {
                 {mode === "signup" ? "Create account" : "Welcome back"}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Free remix booth — load two songs and mash them.
+                Free booth — pick mashup or remix after you sign in.
               </p>
             </div>
             {mode === "signup" ? (
@@ -142,7 +150,7 @@ function LoginPage() {
               {busy
                 ? "Working…"
                 : mode === "signup"
-                  ? "Sign up & open studio"
+                  ? "Sign up & open booth"
                   : "Sign in"}
             </Button>
             <button
@@ -167,7 +175,7 @@ function LoginPage() {
                     variant="secondary"
                     className="w-full"
                     onClick={() =>
-                      void signIn(p.providerId, { callbackURL: "/" })
+                      void signIn(p.providerId, { callbackURL: dest })
                     }
                   >
                     Continue with {p.label}
@@ -180,7 +188,7 @@ function LoginPage() {
                     variant="secondary"
                     className="w-full"
                     onClick={() =>
-                      void signInSocial(p.id, { callbackURL: "/" })
+                      void signInSocial(p.id, { callbackURL: dest })
                     }
                   >
                     Continue with {p.label}
