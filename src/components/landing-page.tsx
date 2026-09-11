@@ -56,8 +56,8 @@ export function LandingPage() {
               After Hours
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
-              Two songs you own. One late-night booth. Mash or remix — then unlock
-              AI planning when the night gets serious.
+              Late-night booth for tracks you own. Mash beats with someone else’s
+              lyrics — or remix a song onto a brand-new beat.
             </p>
           </div>
 

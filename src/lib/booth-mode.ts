@@ -6,104 +6,131 @@ export type TechniquePreset = {
   prompt: string;
 };
 
-export const BOOTH_MODES: Record<
-  BoothMode,
-  {
-    path: `/${BoothMode}`;
-    label: string;
-    eyebrow: string;
-    title: string;
-    blurb: string;
-    actionIdle: string;
-    actionBusy: string;
-    actionReady: (a: string, b: string) => string;
-    briefLabel: string;
-    briefPlaceholder: string;
-    defaultPrompt: string;
-    presets: TechniquePreset[];
-    landingTitle: string;
-    landingBlurb: string;
-  }
-> = {
+export type BoothModeMeta = {
+  path: `/${BoothMode}`;
+  label: string;
+  eyebrow: string;
+  title: string;
+  blurb: string;
+  /** Deck A role label in the booth. */
+  slotA: string;
+  /** Deck B role label in the booth. */
+  slotB: string;
+  slotAHint: string;
+  slotBHint: string;
+  actionIdle: string;
+  actionBusy: string;
+  actionReady: (a: string, b: string) => string;
+  briefLabel: string;
+  briefPlaceholder: string;
+  defaultPrompt: string;
+  presets: TechniquePreset[];
+  landingTitle: string;
+  landingBlurb: string;
+  footerJoin: (a: string, b: string) => string;
+};
+
+/**
+ * Product definitions:
+ * - Mashup — beats of one song + lyrics/vocals of another
+ * - Remix — keep a song, swap in a new beat
+ */
+export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
   mashup: {
     path: "/mashup",
     label: "Mashup",
     eyebrow: "Mashup booth",
-    title: "Song A × Song B",
+    title: "Beats × Lyrics",
     blurb:
-      "Fuse two tracks into one continuous mash — both grooves riding together with long blends and washes.",
-    actionIdle: "Load both songs",
+      "Drop the groove from one track under the vocals of another — beat bed on A, lyrics on B, riding together.",
+    slotA: "Beats",
+    slotB: "Lyrics",
+    slotAHint: "Instrumental / beat bed you own",
+    slotBHint: "Vocal / lyrics track you own",
+    actionIdle: "Load beats and lyrics",
     actionBusy: "Building the mashup…",
     actionReady: (a, b) => `Mash ${a} × ${b}`,
     briefLabel: "Mash brief",
     briefPlaceholder:
-      "How should the mash feel? Long blend, filter wash, both kicks in…",
+      "How should beats and lyrics lock? Long blend, filter wash, bass trade…",
     defaultPrompt:
-      "Mash both songs into one fused cut — keep both grooves riding together with a long blend.",
+      "Mash the beat bed under the lyrics — phrase-lock both, keep vocals clear and the kick driving.",
     presets: [
       {
         id: "long_blend",
-        label: "Long blend",
-        prompt: "Long smooth mash — EQ bass handoff while both tracks ride.",
+        label: "Lock & ride",
+        prompt:
+          "Lock the beat under the lyrics and ride both — clear vocals, solid kick, long blend.",
       },
       {
         id: "filter_blend",
         label: "Filter wash",
-        prompt: "Filter sweep wash from A into B, keep the mash thick.",
-      },
-      {
-        id: "echo_out",
-        label: "Echo layer",
-        prompt: "Echo A out as B lands, leave a ghost of A in the mash.",
+        prompt:
+          "Wash the beat in under the lyrics with a filter sweep — keep the vocal pocket open.",
       },
       {
         id: "bass_swap",
         label: "Bass trade",
-        prompt: "Bass swap mid-mash — kill lows on A while B’s kick takes over.",
+        prompt:
+          "Bass trade into the mash — lyrics stay up while the new kick takes the floor.",
+      },
+      {
+        id: "echo_out",
+        label: "Ghost intro",
+        prompt:
+          "Ghost the beat in with a short echo, then lock lyrics over the groove.",
       },
     ],
     landingTitle: "Mashup",
-    landingBlurb: "Layer two songs into one fused cut.",
+    landingBlurb: "Beats from one song. Lyrics from another.",
+    footerJoin: (a, b) => `${a} × ${b}`,
   },
   remix: {
     path: "/remix",
     label: "Remix",
-    eyebrow: "Remix DJ",
-    title: "Song A → Song B",
+    eyebrow: "Remix booth",
+    title: "Song → New beat",
     blurb:
-      "Beat-match, phrase-align, and hand off with real DJ moves — bass swaps, filter blends, power cuts.",
-    actionIdle: "Load both songs",
+      "Keep the song, change the beat — load the original on A and a new beat bed on B, then hand the groove over.",
+    slotA: "Song",
+    slotB: "New beat",
+    slotAHint: "The track you want remixed",
+    slotBHint: "Replacement beat / instrumental",
+    actionIdle: "Load song and new beat",
     actionBusy: "Building the remix…",
     actionReady: (a, b) => `Remix ${a} → ${b}`,
-    briefLabel: "DJ brief",
+    briefLabel: "Remix brief",
     briefPlaceholder:
-      "How should the handoff feel? Bass swap, filter wash, power cut…",
+      "How should the new beat take over? Bass swap, filter wash, power cut…",
     defaultPrompt:
-      "Club remix transition — phrase-match and hand off cleanly from A into B.",
+      "Remix the song onto a new beat — phrase-match, then hand the groove cleanly to the new kick.",
     presets: [
       {
         id: "bass_swap",
         label: "Bass swap",
-        prompt: "Bass swap — kill lows on A while B’s kick takes over.",
+        prompt:
+          "Bass swap onto the new beat — kill the old lows while the new kick takes over.",
       },
       {
         id: "filter_blend",
         label: "Filter blend",
-        prompt: "Filter sweep wash from A into B, phrase-aware.",
+        prompt:
+          "Filter sweep the original out as the new beat bed lands, phrase-aware.",
       },
       {
         id: "power_cut",
         label: "Power cut",
-        prompt: "Power cut — hard drop to B on the downbeat.",
+        prompt: "Power cut — hard drop onto the new beat on the downbeat.",
       },
       {
         id: "echo_out",
         label: "Echo out",
-        prompt: "Echo A out as B lands on the one.",
+        prompt: "Echo the original out as the new beat lands on the one.",
       },
     ],
     landingTitle: "Remix",
-    landingBlurb: "DJ the transition — cut, swap, hand off.",
+    landingBlurb: "Same song. Brand-new beat.",
+    footerJoin: (a, b) => `${a} → ${b}`,
   },
 };
 

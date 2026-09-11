@@ -108,7 +108,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   ready: false,
   mode: "remix",
   status: "idle",
-  statusText: "Load song A and song B.",
+  statusText: "Load your tracks to start.",
   error: null,
   prompt: "",
   cue: null,
@@ -172,7 +172,7 @@ export const useBooth = create<BoothState>((set, get) => ({
     set({
       ready: true,
       status: "idle",
-      statusText: "Load two tracks you own, then mash them.",
+      statusText: "Load two tracks you own — beats + lyrics, or song + new beat.",
       error: null,
       ...snapshot(),
     });
@@ -251,8 +251,13 @@ export const useBooth = create<BoothState>((set, get) => ({
 
   syncB: () => {
     djEngine.syncToA();
+    const { mode } = get();
+    const bpm = djEngine.deck("a").bpm;
     set({
-      statusText: `B locked to ${djEngine.deck("a").bpm} BPM`,
+      statusText:
+        mode === "mashup"
+          ? `Lyrics locked to ${bpm} BPM beats`
+          : `New beat locked to ${bpm} BPM song`,
       ...snapshot(),
     });
   },
@@ -262,8 +267,12 @@ export const useBooth = create<BoothState>((set, get) => ({
     if (!deckA.hasTrack || !deckB.hasTrack) {
       set({
         status: "error",
-        error: "Load both songs first.",
-        statusText: "Need song A and song B.",
+        error:
+          mode === "mashup"
+            ? "Load a beat bed and a lyrics track first."
+            : "Load the song and a new beat first.",
+        statusText:
+          mode === "mashup" ? "Need beats and lyrics." : "Need song and new beat.",
       });
       return;
     }
@@ -352,8 +361,12 @@ export const useBooth = create<BoothState>((set, get) => ({
     if (!deckA.hasTrack || !deckB.hasTrack) {
       set({
         status: "error",
-        error: "Load both songs first.",
-        statusText: "Need song A and song B.",
+        error:
+          mode === "mashup"
+            ? "Load a beat bed and a lyrics track first."
+            : "Load the song and a new beat first.",
+        statusText:
+          mode === "mashup" ? "Need beats and lyrics." : "Need song and new beat.",
       });
       return;
     }

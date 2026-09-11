@@ -81,13 +81,16 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
       </section>
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
-        <SongSlot id="a" label="Song A" />
-        <SongSlot id="b" label="Song B" />
+        <SongSlot id="a" label={meta.slotA} hint={meta.slotAHint} />
+        <SongSlot id="b" label={meta.slotB} hint={meta.slotBHint} />
       </div>
 
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
-        On iPhone: tap Choose, then pick an M4A or MP3 from Files, Downloads, or
-        Voice Memos. Apple Music catalog tracks can’t be uploaded.
+        {mode === "mashup"
+          ? "Beats on the left, lyrics/vocals on the right — both tracks you own. "
+          : "Original song on the left, replacement beat on the right — both files you own. "}
+        On iPhone: pick an M4A or MP3 from Files, Downloads, or Voice Memos. Apple
+        Music catalog tracks can’t be uploaded.
       </p>
 
       <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
@@ -102,7 +105,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
             onClick={syncB}
           >
             <AudioLines className="size-3.5" />
-            Sync B to A
+            {mode === "mashup" ? "Sync lyrics to beats" : "Sync beat to song"}
           </Button>
         </div>
         <Textarea
@@ -132,7 +135,11 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
           <span className="flex justify-between text-xs text-muted">
             <span>Crossfader</span>
             <span className="tabular-nums">
-              {xfader < -0.33 ? "A" : xfader > 0.33 ? "B" : "Blend"}
+              {xfader < -0.33
+                ? meta.slotA
+                : xfader > 0.33
+                  ? meta.slotB
+                  : "Blend"}
             </span>
           </span>
           <Slider
@@ -232,9 +239,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
           </Button>
           <p className="min-w-0 truncate text-sm text-muted">
             {ready
-              ? mode === "mashup"
-                ? `${deckA.name} × ${deckB.name}`
-                : `${deckA.name} → ${deckB.name}`
+              ? meta.footerJoin(deckA.name, deckB.name)
               : meta.title}
           </p>
         </div>
@@ -244,7 +249,15 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   );
 }
 
-function SongSlot({ id, label }: { id: DeckId; label: string }) {
+function SongSlot({
+  id,
+  label,
+  hint,
+}: {
+  id: DeckId;
+  label: string;
+  hint: string;
+}) {
   const deck = useBooth((s) => (id === "a" ? s.deckA : s.deckB));
   const status = useBooth((s) => s.status);
   const loadFile = useBooth((s) => s.loadFile);
@@ -281,9 +294,12 @@ function SongSlot({ id, label }: { id: DeckId; label: string }) {
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium tracking-widest text-muted uppercase">
-          {label}
-        </p>
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-widest text-muted uppercase">
+            {label}
+          </p>
+          <p className="mt-0.5 text-[11px] leading-snug text-subtle">{hint}</p>
+        </div>
         {deck.hasTrack ? (
           <Badge>{Math.round(deck.bpm)} BPM</Badge>
         ) : (

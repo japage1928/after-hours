@@ -15,7 +15,7 @@ export type DeckInfo = {
 };
 
 export type RunPlanOptions = {
-  /** Mashup holds a blend; remix hands off fully to B. */
+  /** Mashup keeps beats+lyrics blended; remix hands the song onto the new beat. */
   booth?: "mashup" | "remix";
   onComplete?: () => void;
 };

@@ -4,8 +4,9 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { assertAiAllowed, chargeAfterMix } from "@/lib/billing/gate";
 
 /**
- * Intelligent two-deck remix plan using real DJ technique:
- * beat-match → phrase-aware entry → EQ bass swap → crossfade or power cut.
+ * Intelligent two-deck plan:
+ * mashup = beat bed + lyrics/vocals riding together
+ * remix  = original song handed onto a new beat
  */
 export const MixPlanSchema = z.object({
   targetBpm: z.number().min(70).max(180),
@@ -102,13 +103,21 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
           : Math.min(barA * 4, 16);
 
   const cues: Record<MixPlan["technique"], string> = {
-    bass_swap: `Beat-match ${targetBpm}. Ride A, kill the bass on A, bring B’s kick in over ${Math.round(crossfadeSec)}s.`,
-    filter_blend: `Open a high-pass on A into the mix, lock ${targetBpm}, wash into B.`,
-    power_cut: `Phrase-match, then hard cut to B on the downbeat at ${targetBpm}.`,
+    bass_swap: mashup
+      ? `Lock ${targetBpm}. Ride the beat under the lyrics — bass trade while vocals stay clear.`
+      : `Beat-match ${targetBpm}. Hand the song onto the new kick — bass swap over ${Math.round(crossfadeSec)}s.`,
+    filter_blend: mashup
+      ? `Wash the beat under the lyrics at ${targetBpm}, keep the vocal pocket open.`
+      : `Filter the original out as the new beat lands at ${targetBpm}.`,
+    power_cut: mashup
+      ? `Phrase-match, then snap the lyrics onto the beat at ${targetBpm}.`
+      : `Phrase-match, then hard cut onto the new beat at ${targetBpm}.`,
     long_blend: mashup
-      ? `Long mash at ${targetBpm} — keep both grooves in the blend.`
-      : `Long blend at ${targetBpm} — EQ out A’s lows while B takes the floor.`,
-    echo_out: `Echo A out as B lands on the one at ${targetBpm}.`,
+      ? `Long mash at ${targetBpm} — beats drive, lyrics ride on top.`
+      : `Long blend at ${targetBpm} — EQ out the old groove while the new beat takes the floor.`,
+    echo_out: mashup
+      ? `Ghost the beat in, then lock lyrics over the groove at ${targetBpm}.`
+      : `Echo the original out as the new beat lands on the one at ${targetBpm}.`,
   };
 
   const holdSec = mashup
@@ -215,26 +224,31 @@ export const planMix = createServerFn({ method: "POST" })
             messages: [
               {
                 role: "system",
-                content: `You are a working club DJ building a REAL two-deck ${boothLabel} transition — not a random crossfade.
-Use standard DJ craft:
+                content: `You are a working club DJ building a REAL two-deck ${boothLabel}.
+Product rules:
+${
+  data.mode === "mashup"
+    ? `- Mashup: Deck A is the BEAT BED / instrumental. Deck B is LYRICS / vocals.
+- Goal: lock the beat under the lyrics so both ride together — vocals clear, kick driving.
+- Prefer long blends and bass trades; avoid wiping the lyrics out.
+- Keep both decks audible in the pocket when the mash settles.`
+    : `- Remix: Deck A is the ORIGINAL SONG. Deck B is the NEW BEAT / replacement groove.
+- Goal: change the beat of the song — phrase-match, then hand the groove to the new kick.
+- Prefer bass swaps, filter blends, or a clean power cut onto the new beat.
+- Finish with a clean handoff to deck B (the new beat).`
+}
+Craft:
 - Beat-match to one target BPM
 - Align phrase boundaries (8/16/32 bars) for mix-in
 - Prefer bass swaps (EQ kill lows on outgoing while incoming kick takes over)
-- Use filter sweeps or echo-outs when tastes call for it
-- Power cuts only on clear phrase ends
-${
-  data.mode === "mashup"
-    ? "- For mashups prefer long blends and keep both tracks audible in the pocket"
-    : "- For remixes finish a clean handoff to deck B"
-}
 Never request copyrighted stems, never clone artist voices, never impersonate named singers. JSON only.`,
               },
               {
                 role: "user",
                 content: `Mode: ${boothLabel}
-Deck A: "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
-Deck B: "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s
-DJ brief: ${data.prompt || "Club-ready transition — musical, phrase-aware, bass-clean."}
+Deck A (${data.mode === "mashup" ? "beats" : "song"}): "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
+Deck B (${data.mode === "mashup" ? "lyrics" : "new beat"}): "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s
+DJ brief: ${data.prompt || (data.mode === "mashup" ? "Lock beats under lyrics — musical, phrase-aware, vocal-clear." : "Hand the song onto a new beat — phrase-aware, bass-clean.")}
 
 Return JSON:
 {
@@ -243,7 +257,7 @@ Return JSON:
   "bOffsetSec": seconds into B where the entry/drop lives,
   "mixInSec": seconds after A starts before B enters (prefer 8/16 bar multiples),
   "crossfadeSec": blend length (0.5-2 for cuts, 8-24 for blends),
-  "holdSec": seconds to ride B after the handoff,
+  "holdSec": seconds to ride after the handoff,
   "sweepA": boolean,
   "bassSwap": boolean,
   "style": "blend" | "cut" | "echo_fade",
