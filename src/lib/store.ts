@@ -61,6 +61,9 @@ type StudioState = {
   cutTrack: () => Promise<void>;
   renderCurrentVocals: () => Promise<void>;
   mashSelected: (a: Song, b: Song) => Promise<void>;
+  deleteSong: (id: string) => void;
+  exportSong: (song: Song) => void;
+  exportLibrary: () => void;
   togglePlay: () => Promise<void>;
   seek: (beats: number) => void;
   stop: () => void;
@@ -356,6 +359,44 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ status: "ready", statusText: "Both voices in the mix" });
   },
 
+
+  deleteSong: (id) => {
+    const library = get().library.filter((s) => s.id !== id);
+    writeLibrary(library);
+    const song = get().song;
+    if (song?.id === id) {
+      const next = library[0] ?? null;
+      if (next) engine.load(next);
+      else engine.stop();
+      set({
+        library,
+        song: next,
+        vocalsReady: {},
+        beats: 0,
+        durationBeats: next ? engine.durationBeats() : 0,
+        playing: false,
+        statusText: next ? "Ready" : "Write a cut to fill the shelf.",
+      });
+      return;
+    }
+    set({ library });
+  },
+
+  exportSong: (song) => {
+    downloadJson(
+      `after-hours-${slugify(song.title)}.json`,
+      song,
+    );
+  },
+
+  exportLibrary: () => {
+    const library = get().library;
+    downloadJson("after-hours-library.json", {
+      exportedAt: new Date().toISOString(),
+      songs: library,
+    });
+  },
+
   togglePlay: async () => {
     await engine.ensure();
     if (!get().song) return;
@@ -400,4 +441,25 @@ export function songVoices(song: Song): string {
     return `${a} × ${vocalistById(song.vocalistB).name}`;
   }
   return a;
+}
+
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "cut";
+}
+
+function downloadJson(filename: string, data: unknown) {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

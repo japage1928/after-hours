@@ -13,8 +13,10 @@ import {
   adminSyncSubscription,
   getAdminBootstrap,
   listAdminUsers,
+  listAdminAudit,
   listStuckPayments,
   listSubscriptions,
+  type AdminAuditRow,
   type AdminUserRow,
 } from "@/lib/auth/admin-api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -29,7 +31,9 @@ type SubRow = Awaited<ReturnType<typeof listSubscriptions>>[number];
 
 function AdminPage() {
   const { user, isPending } = useCurrentUserState();
-  const [tab, setTab] = useState<"users" | "subs" | "payments">("users");
+  const [tab, setTab] = useState<"users" | "subs" | "payments" | "audit">("users");
+  const [query, setQuery] = useState("");
+  const [audit, setAudit] = useState<AdminAuditRow[] | null>(null);
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
   const [subs, setSubs] = useState<SubRow[] | null>(null);
   const [payments, setPayments] = useState<StuckPayment[] | null>(null);
@@ -47,11 +51,12 @@ function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
 
   const reload = useCallback(async () => {
-    const [boot, rows, subRows, stuck] = await Promise.all([
+    const [boot, rows, subRows, stuck, auditRows] = await Promise.all([
       getAdminBootstrap(),
       listAdminUsers(),
       listSubscriptions(),
       listStuckPayments(),
+      listAdminAudit(),
     ]);
     setAdmins(boot.admins);
     setStats(boot.stats);
@@ -59,6 +64,7 @@ function AdminPage() {
     setUsers(rows);
     setSubs(subRows);
     setPayments(stuck);
+    setAudit(auditRows);
   }, []);
 
   useEffect(() => {
@@ -158,6 +164,7 @@ function AdminPage() {
             ["users", "Accounts"],
             ["subs", "Subscriptions"],
             ["payments", "Stuck payments"],
+            ["audit", "Audit log"],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -175,19 +182,47 @@ function AdminPage() {
 
       {tab === "users" ? (
         <section className="rounded-2xl bg-surface p-5 shadow-border">
-          <h2 className="font-display text-2xl text-fg">User accounts</h2>
-          <p className="mt-1 text-sm text-muted">
-            Reset passwords, grant song credits / usage, or remove accounts.
-          </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl text-fg">User accounts</h2>
+              <p className="mt-1 text-sm text-muted">
+                Search, reset passwords, grant credits / usage, or remove accounts.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => { setBusy(true); setError(null); setNotice(null); void reload().then(() => setNotice("Refreshed")).catch((err) => setError(err instanceof Error ? err.message : "Refresh failed")).finally(() => setBusy(false)); }}
+            >
+              Refresh
+            </Button>
+          </div>
+          <label className="mt-4 flex flex-col gap-1 text-sm">
+            <span className="text-muted">Search</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name or email"
+              className="h-10 rounded-md bg-bg px-3 text-fg shadow-border outline-none focus:ring-2 focus:ring-accent/40"
+            />
+          </label>
           {!users ? (
             <p className="mt-4 text-sm text-muted">Loading users…</p>
           ) : users.length === 0 ? (
             <p className="mt-4 text-sm text-muted">
-              No accounts yet. Sign up at /login with japage628@gmail.com.
-            </p>
+              No accounts yet. Create one at /login.</p>
           ) : (
             <ul className="mt-4 divide-y divide-line">
-              {users.map((u) => (
+              {(users.filter((u) => {
+                const q = query.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  u.email.toLowerCase().includes(q) ||
+                  (u.name ?? "").toLowerCase().includes(q) ||
+                  u.id.toLowerCase().includes(q)
+                );
+              })).map((u) => (
                 <li key={u.id} className="flex flex-col gap-3 py-4">
                   <button
                     type="button"
@@ -261,6 +296,22 @@ function AdminPage() {
                           onClick={() =>
                             void run(
                               () =>
+                                adminGrantSongCredits({
+                                  data: { userId: u.id, count: 3 },
+                                }),
+                              "Granted 3 song credits",
+                            )
+                          }
+                        >
+                          +3 song credits
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(
+                              () =>
                                 adminGrantUsage({
                                   data: {
                                     userId: u.id,
@@ -273,6 +324,57 @@ function AdminPage() {
                           }
                         >
                           +$1 usage
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(
+                              () =>
+                                adminGrantUsage({
+                                  data: {
+                                    userId: u.id,
+                                    amountCents: 500,
+                                    note: "Admin $5 usage credit",
+                                  },
+                                }),
+                              "Granted $5 usage credit",
+                            )
+                          }
+                        >
+                          +$5 usage
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(
+                              () =>
+                                adminGrantUsage({
+                                  data: {
+                                    userId: u.id,
+                                    amountCents: 1000,
+                                    note: "Admin $10 usage credit",
+                                  },
+                                }),
+                              "Granted $10 usage credit",
+                            )
+                          }
+                        >
+                          +$10 usage
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(u.id);
+                            setNotice(`Copied user id ${u.id}`);
+                          }}
+                        >
+                          Copy id
                         </Button>
                         <Button
                           size="sm"
@@ -483,6 +585,37 @@ function AdminPage() {
           )}
         </section>
       ) : null}
+
+      {tab === "audit" ? (
+        <section className="rounded-2xl bg-surface p-5 shadow-border">
+          <h2 className="font-display text-2xl text-fg">Audit log</h2>
+          <p className="mt-1 text-sm text-muted">
+            Recent admin actions — grants, resets, deletes, Stripe syncs.
+          </p>
+          {!audit ? (
+            <p className="mt-4 text-sm text-muted">Loading…</p>
+          ) : audit.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">No audited actions yet.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-line">
+              {audit.map((row) => (
+                <li key={row.id} className="py-3">
+                  <p className="font-medium text-fg">{row.action}</p>
+                  <p className="text-xs text-subtle">
+                    {new Date(row.createdAt).toLocaleString()}
+                    {row.targetUserId ? ` · target ${row.targetUserId}` : ""}
+                    {` · by ${row.adminUserId}`}
+                  </p>
+                  <p className="mt-1 break-all text-xs text-muted">
+                    {row.detailJson}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
     </div>
   );
 }

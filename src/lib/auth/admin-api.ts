@@ -444,3 +444,47 @@ export const adminDeleteUser = createServerFn({ method: "POST" })
     await audit(admin.id, "delete_user", data.userId, {});
     return { ok: true as const };
   });
+
+
+export type AdminAuditRow = {
+  id: string;
+  adminUserId: string;
+  action: string;
+  targetUserId: string | null;
+  detailJson: string;
+  createdAt: string;
+};
+
+export const listAdminAudit = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminAuditRow[]> => {
+    await requireAdminSession();
+    const sql = await getSql();
+    const rows = await sql<{
+      id: string;
+      admin_user_id: string;
+      action: string;
+      target_user_id: string | null;
+      detail_json: string | Record<string, unknown>;
+      created_at: Date | string;
+    }>`
+      select id, admin_user_id, action, target_user_id, detail_json, created_at
+      from admin_audit
+      order by created_at desc
+      limit 80
+    `;
+    return rows.map((r) => ({
+      id: r.id,
+      adminUserId: r.admin_user_id,
+      action: r.action,
+      targetUserId: r.target_user_id,
+      detailJson:
+        typeof r.detail_json === "string"
+          ? r.detail_json
+          : JSON.stringify(r.detail_json ?? {}),
+      createdAt:
+        r.created_at instanceof Date
+          ? r.created_at.toISOString()
+          : String(r.created_at),
+    }));
+  },
+);
