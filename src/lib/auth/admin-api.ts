@@ -8,7 +8,6 @@ import { getStripe, stripeConfigured } from "@/lib/billing/stripe";
 import { upsertSubscriptionFromStripe } from "@/lib/billing/checkout";
 import { formatUsd } from "@/lib/billing/plans";
 import {
-  getEntitlement,
   grantSongCredits,
   grantUsageCredit,
   newId,
@@ -101,43 +100,56 @@ export const listAdminUsers = createServerFn({ method: "GET" }).handler(
       plan_id: string | null;
       sub_status: string | null;
       usage_budget_cents: number | null;
+      usage_used_cents: number | null;
+      song_credits: number | null;
     }>`
       select u.id, u.name, u.email, u."emailVerified", u."createdAt",
-             s.plan_id, s.status as sub_status, s.usage_budget_cents
+             s.plan_id, s.status as sub_status, s.usage_budget_cents,
+             coalesce(usage.used, 0)::int as usage_used_cents,
+             coalesce(credits.total, 0)::int as song_credits
       from "user" u
       left join lateral (
-        select plan_id, status, usage_budget_cents, current_period_start, current_period_end
+        select plan_id, status, usage_budget_cents,
+               current_period_start, current_period_end
         from billing_subscription bs
         where bs.user_id = u.id
           and bs.status in ('active', 'trialing', 'past_due')
         order by bs.updated_at desc
         limit 1
       ) s on true
+      left join lateral (
+        select coalesce(sum(amount_cents), 0)::int as used
+        from usage_ledger ul
+        where ul.user_id = u.id
+          and s.current_period_start is not null
+          and ul.period_start = s.current_period_start
+          and ul.period_end = s.current_period_end
+      ) usage on true
+      left join lateral (
+        select coalesce(sum(remaining), 0)::int as total
+        from song_credit sc
+        where sc.user_id = u.id and sc.remaining > 0
+      ) credits on true
       order by u."createdAt" desc
       limit 200
     `;
     const admins = new Set(adminEmails());
-    const result: AdminUserRow[] = [];
-    for (const r of rows) {
-      const entitlement = await getEntitlement(r.id);
-      result.push({
-        id: r.id,
-        name: r.name,
-        email: r.email,
-        emailVerified: Boolean(r.emailVerified),
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-        isAdmin: admins.has(r.email.trim().toLowerCase()),
-        planId: entitlement.planId ?? r.plan_id,
-        subStatus: r.sub_status,
-        usageUsedCents: entitlement.usageUsedCents,
-        usageBudgetCents: entitlement.usageBudgetCents,
-        songCredits: entitlement.songCredits,
-      });
-    }
-    return result;
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      emailVerified: Boolean(r.emailVerified),
+      createdAt:
+        r.createdAt instanceof Date
+          ? r.createdAt.toISOString()
+          : String(r.createdAt),
+      isAdmin: admins.has(r.email.trim().toLowerCase()),
+      planId: r.plan_id,
+      subStatus: r.sub_status,
+      usageUsedCents: Math.max(0, Number(r.usage_used_cents ?? 0)),
+      usageBudgetCents: Number(r.usage_budget_cents ?? 0),
+      songCredits: Number(r.song_credits ?? 0),
+    }));
   },
 );
 

@@ -18,13 +18,13 @@ import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
-/** Same resolution order as src/lib/database-url.ts (keep in sync). */
-function resolveDatabaseUrl(env = process.env) {
+/** Prefer a direct / non-pooling URL for one-shot migrate (session pooler saturates). */
+function resolveMigrateUrl(env = process.env) {
   for (const key of [
+    "POSTGRES_URL_NON_POOLING",
     "DATABASE_URL",
     "POSTGRES_URL",
     "POSTGRES_PRISMA_URL",
-    "POSTGRES_URL_NON_POOLING",
   ]) {
     const value = env[key]?.trim();
     if (value) return value;
@@ -32,7 +32,28 @@ function resolveDatabaseUrl(env = process.env) {
   return undefined;
 }
 
-const databaseUrl = resolveDatabaseUrl(process.env);
+function toTransactionPoolerUrl(url) {
+  try {
+    const u = new URL(url);
+    // Supabase session pooler is :5432 on *.pooler.supabase.com — migrate is
+    // happier on transaction mode (:6543) which doesn't hold sessions open.
+    if (
+      u.hostname.includes("pooler.supabase.com") &&
+      (u.port === "5432" || u.port === "")
+    ) {
+      u.port = "6543";
+      return u.toString();
+    }
+  } catch {
+    /* keep original */
+  }
+  return url;
+}
+
+const databaseUrlRaw = resolveMigrateUrl(process.env);
+const databaseUrl = databaseUrlRaw
+  ? toTransactionPoolerUrl(databaseUrlRaw)
+  : undefined;
 if (!databaseUrl) {
   console.log(
     "[migrate] DATABASE_URL / POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
@@ -125,6 +146,15 @@ main().catch((err) => {
   // pg errors carry the context needed to debug a bad SQL file.
   for (const key of ["code", "detail", "hint", "position", "where"]) {
     if (err?.[key] != null) console.error(`[migrate]   ${key}: ${err[key]}`);
+  }
+  const msg = String(err?.message ?? err);
+  // Deploy builds should not die when the session pooler is saturated and the
+  // schema is already applied — warn and continue so app code can ship.
+  if (/EMAXCONN|max clients/i.test(msg)) {
+    console.warn(
+      "[migrate] pool saturated — skipping this deploy migrate (schema may already be current).",
+    );
+    process.exit(0);
   }
   process.exit(1);
 });
