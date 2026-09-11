@@ -39,7 +39,10 @@ import { resolveDatabaseUrl } from "@/lib/database-url";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
-import { GROK_PROVIDERS } from "./providers";
+import {
+  GROK_PROVIDERS,
+  nativeSocialProvidersFromEnv,
+} from "./providers";
 import { pgliteDialect } from "./pglite-dialect";
 import {
   GROK_ISSUER_DEFAULT,
@@ -173,6 +176,41 @@ const grokOAuthPlugin = authConfigured
     })
   : null;
 
+
+const nativeSocial = nativeSocialProvidersFromEnv();
+const socialProviders =
+  nativeSocial.length === 0
+    ? undefined
+    : Object.fromEntries(
+        nativeSocial.map((p) => {
+          if (p.id === "google") {
+            return [
+              "google",
+              {
+                clientId: env("GOOGLE_CLIENT_ID") as string,
+                clientSecret: env("GOOGLE_CLIENT_SECRET") as string,
+              },
+            ];
+          }
+          if (p.id === "facebook") {
+            return [
+              "facebook",
+              {
+                clientId: env("FACEBOOK_CLIENT_ID") as string,
+                clientSecret: env("FACEBOOK_CLIENT_SECRET") as string,
+              },
+            ];
+          }
+          return [
+            "twitter",
+            {
+              clientId: env("TWITTER_CLIENT_ID") as string,
+              clientSecret: env("TWITTER_CLIENT_SECRET") as string,
+            },
+          ];
+        }),
+      );
+
 export const auth = betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
@@ -184,6 +222,7 @@ export const auth = betterAuth({
   // See `trustedOrigins` construction above — must cover live preview hosts AND
   // local loopback variants, or clients get "Invalid origin".
   trustedOrigins,
+  ...(socialProviders ? { socialProviders } : {}),
 
   // Encrypt broker-issued OAuth tokens at rest, and treat the broker's upstreams
   // as trusted first-party identities. The broker owns identity and X emails are
@@ -197,6 +236,7 @@ export const auth = betterAuth({
       enabled: true,
       trustedProviders: [
         ...GROK_PROVIDERS.map((p) => p.providerId),
+        ...nativeSocial.map((p) => p.id),
         GATE_PROVIDER_ID,
       ],
       // X's synthetic email is never "verified", so don't gate linking on the

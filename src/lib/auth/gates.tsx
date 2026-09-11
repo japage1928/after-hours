@@ -1,6 +1,13 @@
-import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { Navigate } from "@tanstack/react-router";
-import { GROK_PROVIDERS, authEnabled, signIn, signOut } from "./client";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Link, Navigate } from "@tanstack/react-router";
+import {
+  GROK_PROVIDERS,
+  authEnabled,
+  nativeSocialProvidersFromVite,
+  signIn,
+  signInSocial,
+  signOut,
+} from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
@@ -64,14 +71,25 @@ export function SignInGate({
 }
 
 export function SignInButtons() {
+  const native = nativeSocialProvidersFromVite();
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
       {GROK_PROVIDERS.map((p) => (
         <button
           key={p.providerId}
           type="button"
-          onClick={() => signIn(p.providerId, { callbackURL: "/" })}
-          className="w-full cursor-pointer rounded-md border border-neutral-300 px-4 py-2 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
+          onClick={() => void signIn(p.providerId, { callbackURL: "/" })}
+          className="w-full cursor-pointer rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg shadow-border hover:bg-surface-2"
+        >
+          Continue with {p.label}
+        </button>
+      ))}
+      {native.map((p) => (
+        <button
+          key={`native-${p.id}`}
+          type="button"
+          onClick={() => void signInSocial(p.id, { callbackURL: "/" })}
+          className="w-full cursor-pointer rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg shadow-border hover:bg-surface-2"
         >
           Continue with {p.label}
         </button>
@@ -89,44 +107,101 @@ export function SignInButtons() {
  */
 export function UserButton() {
   const user = useCurrentUser();
-  // Sign-out can take a moment (and can fail when deployed), so the control
-  // shows it is working and cannot be fired twice.
+  const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const gateSession = useSyncExternalStore(
     subscribeToNothing,
     hasGateSessionMarker,
     noGateSessionOnServer,
   );
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (!user) return null;
   const label = user.displayName ?? user.primaryEmail ?? "Account";
+
   return (
-    <div className="flex items-center gap-2">
-      {user.profileImageUrl ? (
-        <img
-          src={user.profileImageUrl}
-          alt=""
-          className="h-8 w-8 rounded-full object-cover"
-        />
-      ) : (
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-black/10 text-sm font-medium dark:bg-white/20">
-          {label.charAt(0).toUpperCase()}
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-11 items-center gap-2 rounded-md bg-surface-2 px-2 shadow-border"
+      >
+        {user.profileImageUrl ? (
+          <img
+            src={user.profileImageUrl}
+            alt=""
+            className="size-7 rounded-full object-cover"
+          />
+        ) : (
+          <span className="grid size-7 place-items-center rounded-full bg-surface text-xs font-medium text-fg">
+            {label.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className="hidden max-w-[7rem] truncate text-sm font-medium text-fg sm:inline">
+          {label}
         </span>
-      )}
-      <span className="text-sm font-medium">{label}</span>
-      {authEnabled && !gateSession && (
-        <button
-          type="button"
-          disabled={signingOut}
-          onClick={() => {
-            setSigningOut(true);
-            // Success navigates away; on failure re-enable so it can be retried.
-            void signOut().catch(() => setSigningOut(false));
-          }}
-          className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl bg-surface py-1 shadow-border"
         >
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
-      )}
+          <div className="border-b border-line px-3 py-2">
+            <p className="truncate text-sm font-medium text-fg">{label}</p>
+            {user.primaryEmail ? (
+              <p className="truncate text-xs text-muted">{user.primaryEmail}</p>
+            ) : null}
+          </div>
+          <Link
+            to="/settings"
+            role="menuitem"
+            className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
+            onClick={() => setOpen(false)}
+          >
+            Settings
+          </Link>
+          <Link
+            to="/pricing"
+            role="menuitem"
+            className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
+            onClick={() => setOpen(false)}
+          >
+            Plans
+          </Link>
+          {authEnabled && !gateSession ? (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={signingOut}
+              className="block w-full px-3 py-2 text-left text-sm text-fg hover:bg-surface-2 disabled:opacity-60"
+              onClick={() => {
+                setSigningOut(true);
+                void signOut("/login").catch(() => setSigningOut(false));
+              }}
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -37,7 +37,6 @@ export function PlayerStage() {
         </p>
         {song.explicit ? <Badge tone="rec">Explicit</Badge> : <Badge>Clean</Badge>}
         {song.mode === "mashup" ? <Badge tone="accent">Mashup</Badge> : null}
-        {song.isDemo ? <Badge>House cut</Badge> : null}
       </div>
 
       <h1 className="font-display mt-3 text-[2rem] leading-none tracking-tight text-fg sm:text-4xl md:text-6xl">

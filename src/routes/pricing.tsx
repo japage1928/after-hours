@@ -118,7 +118,7 @@ function PricingPage() {
 
       {!stripeReady ? (
         <p className="rounded-2xl bg-surface p-4 text-sm text-muted shadow-border">
-          Checkout is warming up — Stripe is not fully configured on this
+          Checkout isn’t available yet — Stripe still needs to be configured on this
           deploy yet.
         </p>
       ) : null}

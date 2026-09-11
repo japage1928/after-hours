@@ -59,14 +59,17 @@ export function LibraryPanel() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
           <ul className="flex flex-col gap-2">
-            {library.map((song) => (
+            {library.length === 0 ? (
+            <p className="px-1 py-6 text-sm text-muted">No cuts yet. Write one in the Write room.</p>
+          ) : null}
+          {library.map((song) => (
               <LibraryRow
                 key={song.id}
                 song={song}
                 active={song.id === currentId}
                 selected={picked.includes(song.id)}
                 onPlay={() => {
-                  loadSong(song, !song.isDemo);
+                  loadSong(song, true);
                   void useStudio.getState().togglePlay();
                   useStudio.getState().setLibraryOpen(false);
                 }}
@@ -122,7 +125,6 @@ function LibraryRow({
         <div className="mt-1.5 flex flex-wrap gap-1">
           {song.explicit ? <Badge tone="rec">E</Badge> : null}
           {song.mode === "mashup" ? <Badge>Mash</Badge> : null}
-          {song.isDemo ? <Badge>House</Badge> : null}
         </div>
       </button>
       <button

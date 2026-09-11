@@ -1,7 +1,11 @@
 import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
-import { GROK_PROVIDERS } from "./providers";
+import {
+  GROK_PROVIDERS,
+  nativeSocialProvidersFromVite,
+  type NativeSocialId,
+} from "./providers";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -38,7 +42,8 @@ export const authClient = createAuthClient({
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
 /** The upstream providers to render sign-in buttons for. */
-export { GROK_PROVIDERS };
+export { GROK_PROVIDERS, nativeSocialProvidersFromVite };
+export type { NativeSocialId };
 
 // ── Live-preview bearer token ────────────────────────────────────────────────
 // The embedded preview iframe has partitioned cookies, so we keep the session's
@@ -218,6 +223,34 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
  * a hand-rolled control must catch it and let the visitor retry. In the live
  * preview the local clear is sufficient, so it always resolves.
  */
+
+/**
+ * Direct Better Auth social sign-in (Google / Facebook / X) when native OAuth
+ * env vars are configured and exposed via `VITE_NATIVE_SOCIAL`.
+ */
+export async function signInSocial(
+  provider: NativeSocialId,
+  opts: { callbackURL?: string; errorCallbackURL?: string } = {},
+): Promise<void> {
+  const callbackURL = opts.callbackURL ?? "/";
+  const errorCallbackURL = opts.errorCallbackURL ?? "/";
+
+  await runPreSignInSignOut({
+    livePreview: inLivePreview(),
+    hasBearer: Boolean(getBearerToken()),
+    requestSignOut: () => authClient.signOut(),
+    clearToken: () => setBearerToken(null),
+  });
+
+  const { data, error } = await authClient.signIn.social({
+    provider,
+    callbackURL,
+    errorCallbackURL,
+  });
+  if (error) throw new Error(error.message ?? "Sign-in failed");
+  if (data?.url) window.location.href = data.url;
+}
+
 export async function signOut(redirectTo = "/"): Promise<void> {
   await runSignOut({
     livePreview: inLivePreview(),

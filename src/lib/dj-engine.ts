@@ -1,6 +1,5 @@
 import { detectBpm, waveformPeaks, type BpmGuess } from "@/lib/bpm";
 import type { MixPlan } from "@/lib/dj-api";
-import { makeHouseLoop, makeTrapLoop } from "@/lib/dj-loops";
 
 export type DeckId = "a" | "b";
 
@@ -65,7 +64,6 @@ export class DjEngine {
   private pumping = false;
   private raf = 0;
   private mixTimer = 0;
-  private demoJob: Promise<void> | null = null;
   private decks: Record<DeckId, DeckNodes>;
 
   constructor() {
@@ -171,20 +169,9 @@ export class DjEngine {
     this.startPump();
   }
 
+  /** Demo loops removed — decks stay empty until the user loads real tracks. */
   async loadDemos(): Promise<void> {
-    if (!this.demoJob) {
-      this.demoJob = (async () => {
-        try {
-          const [house, trap] = await Promise.all([makeHouseLoop(), makeTrapLoop()]);
-          if (!this.decks.a.buffer) this.setBuffer("a", house, "Last Light", 124, true);
-          if (!this.decks.b.buffer) this.setBuffer("b", trap, "Night Shift", 140, true);
-        } catch (err) {
-          this.demoJob = null;
-          throw err;
-        }
-      })();
-    }
-    await this.demoJob;
+    await this.ensure();
   }
 
   async decodeFile(file: File): Promise<AudioBuffer> {
@@ -347,26 +334,58 @@ export class DjEngine {
     this.setXfader(-1);
     this.setFilter("a", 0);
     this.setFilter("b", 0);
+    // Reset EQ; bass-swap starts with full lows on A.
+    this.setEq("a", "low", 0);
+    this.setEq("a", "mid", 0);
+    this.setEq("a", "high", 0);
+    this.setEq("b", "low", plan.bassSwap ? -1 : 0);
+    this.setEq("b", "mid", 0);
+    this.setEq("b", "high", 0);
+
     const now = this.ctx.currentTime + 0.08;
     await this.playDeck("a", plan.aOffsetSec, now);
     const bWhen = now + plan.mixInSec;
     await this.playDeck("b", plan.bOffsetSec, bWhen);
+
     const t0 = performance.now();
     const mixInMs = plan.mixInSec * 1000;
-    const fadeMs = plan.crossfadeSec * 1000;
+    const fadeMs = Math.max(80, plan.crossfadeSec * 1000);
     const holdMs = plan.holdSec * 1000;
+    const isCut = plan.style === "cut" || plan.technique === "power_cut";
+
     const tick = () => {
       const t = performance.now() - t0;
       if (t < mixInMs) {
         this.setXfader(-1);
         if (plan.sweepA) this.setFilter("a", 0);
+        if (plan.bassSwap) {
+          this.setEq("a", "low", 0);
+          this.setEq("b", "low", -1);
+        }
       } else if (t < mixInMs + fadeMs) {
-        const u = (t - mixInMs) / fadeMs;
-        this.setXfader(-1 + u * 2);
-        if (plan.sweepA) this.setFilter("a", u);
+        const u = Math.min(1, (t - mixInMs) / fadeMs);
+        // Ease for blends; near-instant for power cuts.
+        const shaped = isCut ? Math.min(1, u * 8) : u * u * (3 - 2 * u);
+        this.setXfader(-1 + shaped * 2);
+        if (plan.sweepA || plan.technique === "filter_blend") {
+          this.setFilter("a", shaped);
+        }
+        if (plan.technique === "echo_out") {
+          this.setFilter("a", Math.min(1, shaped * 1.2));
+          this.setEq("a", "high", shaped * 0.4);
+        }
+        if (plan.bassSwap) {
+          // Classic DJ bass swap across the transition.
+          this.setEq("a", "low", -shaped);
+          this.setEq("b", "low", -1 + shaped);
+        }
       } else {
         this.setXfader(1);
         if (plan.sweepA) this.setFilter("a", 1);
+        if (plan.bassSwap) {
+          this.setEq("a", "low", -1);
+          this.setEq("b", "low", 0);
+        }
       }
       if (t < mixInMs + fadeMs + holdMs) {
         this.mixTimer = window.requestAnimationFrame(tick);

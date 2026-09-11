@@ -6,7 +6,9 @@ import {
   GROK_PROVIDERS,
   authClient,
   authEnabled,
+  nativeSocialProvidersFromVite,
   signIn,
+  signInSocial,
 } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
@@ -166,6 +168,19 @@ function LoginPage() {
                     className="w-full"
                     onClick={() =>
                       void signIn(p.providerId, { callbackURL: "/" })
+                    }
+                  >
+                    Continue with {p.label}
+                  </Button>
+                ))}
+                {nativeSocialProvidersFromVite().map((p) => (
+                  <Button
+                    key={`native-${p.id}`}
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() =>
+                      void signInSocial(p.id, { callbackURL: "/" })
                     }
                   >
                     Continue with {p.label}

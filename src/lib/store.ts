@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { engine, type Mix } from "@/lib/audio-engine";
-import { DEMO_SONGS } from "@/lib/demo-songs";
 import { generateSong, renderVocal } from "@/lib/song-api";
 import type { GenerateInput, Length, Mode, Song } from "@/lib/types";
 import { voiceIdFor, vocalistById } from "@/lib/vocalists";
@@ -8,16 +7,16 @@ import { voiceIdFor, vocalistById } from "@/lib/vocalists";
 const LIBRARY_KEY = "after-hours.library.v1";
 
 function readLibrary(): Song[] {
-  if (typeof window === "undefined") return DEMO_SONGS;
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(LIBRARY_KEY);
-    if (!raw) return DEMO_SONGS;
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as Song[];
-    const saved = Array.isArray(parsed) ? parsed.filter((s) => s && s.id && s.sections) : [];
-    const demos = DEMO_SONGS.filter((d) => !saved.some((s) => s.id === d.id));
-    return [...demos, ...saved];
+    return Array.isArray(parsed)
+      ? parsed.filter((s) => s && s.id && s.sections && !s.isDemo)
+      : [];
   } catch {
-    return DEMO_SONGS;
+    return [];
   }
 }
 
@@ -131,11 +130,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   vocalistA: "diesel",
   vocalistB: "sal",
   length: "cut",
-  song: DEMO_SONGS[0] ?? null,
-  library: DEMO_SONGS,
+  song: null,
+  library: [],
   libraryOpen: false,
   status: "idle",
-  statusText: "Ready",
+  statusText: "Write a cut to fill the shelf.",
   error: null,
   playing: false,
   beats: 0,
@@ -158,12 +157,18 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   hydrate: () => {
     const library = readLibrary();
-    const song = get().song ?? library[0] ?? DEMO_SONGS[0] ?? null;
+    const song = get().song ?? library[0] ?? null;
     if (song) engine.load(song);
+    else engine.stop();
     set({
       library,
       song,
-      durationBeats: engine.durationBeats(),
+      durationBeats: song ? engine.durationBeats() : 0,
+      statusText: song
+        ? "Ready"
+        : library.length
+          ? "Pick a cut from the shelf."
+          : "Write a cut to fill the shelf.",
     });
     if (!tickBound) {
       tickBound = true;
