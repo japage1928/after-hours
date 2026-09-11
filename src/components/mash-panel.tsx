@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Visualizer } from "@/components/visualizer";
 import { PlansGrid } from "@/components/plans-grid";
 import { AUDIO_FILE_ACCEPT } from "@/lib/audio-file";
+import { GROOVE_STYLES } from "@/lib/ai-beat";
 import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { djEngine, type DeckId } from "@/lib/dj-engine";
 import { useBooth } from "@/lib/dj-store";
@@ -53,8 +54,16 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   const timeB = useBooth((s) => s.timeB);
   const needsUpgrade = useBooth((s) => s.needsUpgrade);
   const usedAi = useBooth((s) => s.usedAi);
+  const grooveStyle = useBooth((s) => s.grooveStyle);
+  const setGrooveStyle = useBooth((s) => s.setGrooveStyle);
+  const aiBeatActive = useBooth((s) => s.aiBeatActive);
+  const armAiBeat = useBooth((s) => s.armAiBeat);
   const busy = status === "loading" || status === "planning";
-  const ready = deckA.hasTrack && deckB.hasTrack;
+  // Remix only needs the song — AI DJ arms the beat. Mashup needs both uploads.
+  const ready =
+    mode === "remix"
+      ? deckA.hasTrack
+      : deckA.hasTrack && deckB.hasTrack;
 
   useEffect(() => {
     void hydrate();
@@ -82,13 +91,60 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
         <SongSlot id="a" label={meta.slotA} hint={meta.slotAHint} />
-        <SongSlot id="b" label={meta.slotB} hint={meta.slotBHint} />
+        <SongSlot
+          id="b"
+          label={meta.slotB}
+          hint={
+            mode === "remix" && aiBeatActive
+              ? "AI DJ groove — swap style below or upload your own"
+              : meta.slotBHint
+          }
+        />
       </div>
+
+      {mode === "remix" ? (
+        <section className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border md:p-5">
+          <p className="text-xs font-medium tracking-widest text-muted uppercase">
+            AI DJ groove
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {GROOVE_STYLES.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => void setGrooveStyle(g.id)}
+                className={cn(
+                  "rounded-md bg-surface-2 px-2.5 py-1.5 text-left text-xs text-muted transition-colors hover:text-fg",
+                  grooveStyle === g.id &&
+                    aiBeatActive &&
+                    "bg-accent text-accent-fg",
+                )}
+              >
+                <span className="font-medium">{g.label}</span>
+                <span className="mt-0.5 block text-[10px] opacity-80">
+                  {g.blurb}
+                </span>
+              </button>
+            ))}
+          </div>
+          {!aiBeatActive && deckB.hasTrack ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-1 w-fit"
+              disabled={!deckA.hasTrack}
+              onClick={() => void armAiBeat()}
+            >
+              Use AI DJ beat instead
+            </Button>
+          ) : null}
+        </section>
+      ) : null}
 
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
         {mode === "mashup"
           ? "Beats on the left, lyrics/vocals on the right — both tracks you own. "
-          : "Original song on the left, replacement beat on the right — both files you own. "}
+          : "Load your song on the left. The AI DJ builds the beat on the right — or upload your own groove. "}
         On iPhone: pick an M4A or MP3 from Files, Downloads, or Voice Memos. Apple
         Music catalog tracks can’t be uploaded.
       </p>
@@ -105,7 +161,11 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
             onClick={syncB}
           >
             <AudioLines className="size-3.5" />
-            {mode === "mashup" ? "Sync lyrics to beats" : "Sync beat to song"}
+            {mode === "mashup"
+              ? "Sync lyrics to beats"
+              : aiBeatActive
+                ? "Lock AI beat to song"
+                : "Sync beat to song"}
           </Button>
         </div>
         <Textarea

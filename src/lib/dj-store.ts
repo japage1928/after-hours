@@ -4,6 +4,12 @@ import {
   classifyAudioFile,
   displayTrackName,
 } from "@/lib/audio-file";
+import {
+  aiBeatDeckName,
+  renderAiBeat,
+  syntheticPeaks,
+  type GrooveStyle,
+} from "@/lib/ai-beat";
 import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
@@ -23,9 +29,12 @@ type BoothState = {
   prompt: string;
   cue: string | null;
   plan: MixPlan | null;
-  /** true when last applied plan came from the AI path and was charged */
   usedAi: boolean | null;
   needsUpgrade: boolean;
+  /** Remix: AI DJ groove style for the generated beat bed. */
+  grooveStyle: GrooveStyle;
+  /** Remix: true when deck B is an AI-generated beat (not a user upload). */
+  aiBeatActive: boolean;
   xfader: number;
   playing: boolean;
   playingA: boolean;
@@ -41,6 +50,8 @@ type BoothState = {
   hydrate: () => Promise<void>;
   setMode: (mode: BoothMode) => void;
   setPrompt: (v: string) => void;
+  setGrooveStyle: (style: GrooveStyle) => Promise<void>;
+  armAiBeat: () => Promise<void>;
   setXfader: (v: number) => void;
   setVolume: (id: DeckId, v: number) => void;
   setEq: (id: DeckId, band: "low" | "mid" | "high", v: number) => void;
@@ -108,17 +119,54 @@ async function runEnginePlan(
   if (gen === mixGeneration) set(snapshot());
 }
 
+/** Remix: put a looping AI beat on B, locked to the song BPM. */
+async function ensureRemixBeat(
+  get: () => BoothState,
+  set: (partial: Partial<BoothState>) => void,
+): Promise<boolean> {
+  const { deckA, grooveStyle, aiBeatActive, deckB } = get();
+  if (!deckA.hasTrack) {
+    set({
+      status: "error",
+      error: "Load a song first — the AI DJ needs something to remix.",
+      statusText: "Need a song.",
+    });
+    return false;
+  }
+  // Keep a user-uploaded beat unless we're in AI-beat mode.
+  if (deckB.hasTrack && !aiBeatActive) return true;
+
+  await djEngine.ensure();
+  const bpm = Math.round(deckA.bpm || 120);
+  const proxy = {
+    sampleRate: djEngine.sampleRate(),
+    createBuffer: (ch: number, len: number, rate: number) =>
+      djEngine.createBuffer(ch, len, rate),
+  } as AudioContext;
+  const buffer = renderAiBeat(proxy, { bpm, style: grooveStyle, bars: 16 });
+  const name = aiBeatDeckName(grooveStyle, bpm);
+  djEngine.loadAiBeat("b", buffer, name, bpm, syntheticPeaks(buffer));
+  set({
+    aiBeatActive: true,
+    statusText: `${name} armed`,
+    ...snapshot(),
+  });
+  return true;
+}
+
 export const useBooth = create<BoothState>((set, get) => ({
   ready: false,
   mode: "remix",
   status: "idle",
-  statusText: "Load your tracks to start.",
+  statusText: "Load a song — the AI DJ brings the beat.",
   error: null,
   prompt: "",
   cue: null,
   plan: null,
   usedAi: null,
   needsUpgrade: false,
+  grooveStyle: "house",
+  aiBeatActive: false,
   xfader: -0.15,
   playing: false,
   playingA: false,
@@ -132,9 +180,29 @@ export const useBooth = create<BoothState>((set, get) => ({
   eqA: { low: 0, mid: 0, high: 0 },
   eqB: { low: 0, mid: 0, high: 0 },
 
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => {
+    set({
+      mode,
+      statusText:
+        mode === "remix"
+          ? "Load a song — the AI DJ brings the beat."
+          : "Load beats and lyrics you own.",
+    });
+  },
 
   setPrompt: (prompt) => set({ prompt }),
+
+  setGrooveStyle: async (style) => {
+    set({ grooveStyle: style, aiBeatActive: true });
+    if (get().mode === "remix" && get().deckA.hasTrack) {
+      await ensureRemixBeat(get, set);
+    }
+  },
+
+  armAiBeat: async () => {
+    set({ aiBeatActive: true });
+    await ensureRemixBeat(get, set);
+  },
 
   setXfader: (v) => {
     djEngine.setXfader(v);
@@ -157,7 +225,6 @@ export const useBooth = create<BoothState>((set, get) => ({
       tickBound = true;
       djEngine.onTick((t) => {
         const now = performance.now();
-        // ~20 Hz is enough for meters; still update immediately when stopped.
         if (t.playing && now - lastTickMs < 50) return;
         lastTickMs = now;
         set({
@@ -176,7 +243,10 @@ export const useBooth = create<BoothState>((set, get) => ({
     set({
       ready: true,
       status: "idle",
-      statusText: "Load two tracks you own — beats + lyrics, or song + new beat.",
+      statusText:
+        get().mode === "remix"
+          ? "Load a song — the AI DJ brings the beat."
+          : "Load beats and lyrics you own.",
       error: null,
       ...snapshot(),
     });
@@ -226,8 +296,13 @@ export const useBooth = create<BoothState>((set, get) => ({
         plan: null,
         usedAi: null,
         cue: null,
+        aiBeatActive: id === "b" ? false : get().aiBeatActive,
         ...snapshot(),
       });
+      if (get().mode === "remix" && id === "a") {
+        set({ aiBeatActive: true });
+        await ensureRemixBeat(get, set);
+      }
     } catch (err) {
       set({
         status: "error",
@@ -255,28 +330,36 @@ export const useBooth = create<BoothState>((set, get) => ({
 
   syncB: () => {
     djEngine.syncToA();
-    const { mode } = get();
+    const { mode, aiBeatActive } = get();
     const bpm = djEngine.deck("a").bpm;
     set({
       statusText:
         mode === "mashup"
           ? `Lyrics locked to ${bpm} BPM beats`
-          : `New beat locked to ${bpm} BPM song`,
+          : aiBeatActive
+            ? `AI beat locked to ${bpm} BPM song`
+            : `New beat locked to ${bpm} BPM song`,
       ...snapshot(),
     });
   },
 
   dropMix: async () => {
-    const { deckA, deckB, prompt, mode } = get();
+    const { prompt, mode } = get();
+    if (mode === "remix") {
+      const ok = await ensureRemixBeat(get, set);
+      if (!ok) return;
+    }
+
+    const { deckA, deckB } = get();
     if (!deckA.hasTrack || !deckB.hasTrack) {
       set({
         status: "error",
         error:
           mode === "mashup"
             ? "Load a beat bed and a lyrics track first."
-            : "Load the song and a new beat first.",
+            : "Load a song first — the AI DJ will bring the beat.",
         statusText:
-          mode === "mashup" ? "Need beats and lyrics." : "Need song and new beat.",
+          mode === "mashup" ? "Need beats and lyrics." : "Need a song.",
       });
       return;
     }
@@ -288,7 +371,9 @@ export const useBooth = create<BoothState>((set, get) => ({
     set({
       status: "planning",
       statusText:
-        mode === "mashup" ? "Building the mashup…" : "Building the remix…",
+        mode === "mashup"
+          ? "Building the mashup…"
+          : "AI DJ writing the remix…",
       error: null,
       cue: null,
       needsUpgrade: false,
@@ -320,7 +405,8 @@ export const useBooth = create<BoothState>((set, get) => ({
             usedAi: null,
             needsUpgrade: true,
             status: "idle",
-            statusText: "AI planning needs a plan — pick one below, or continue free.",
+            statusText:
+              "AI DJ needs a plan — pick one below, or continue free.",
             error: res.error,
           });
           return;
@@ -335,8 +421,8 @@ export const useBooth = create<BoothState>((set, get) => ({
         set({
           error:
             err instanceof Error
-              ? `${err.message} — playing local phrase lock.`
-              : "AI planner failed — playing local phrase lock.",
+              ? `${err.message} — playing local DJ set.`
+              : "AI planner failed — playing local DJ set.",
         });
       }
 
@@ -363,16 +449,21 @@ export const useBooth = create<BoothState>((set, get) => ({
   },
 
   runLocalMix: async () => {
-    const { deckA, deckB, prompt, mode } = get();
+    const { prompt, mode } = get();
+    if (mode === "remix") {
+      const ok = await ensureRemixBeat(get, set);
+      if (!ok) return;
+    }
+    const { deckA, deckB } = get();
     if (!deckA.hasTrack || !deckB.hasTrack) {
       set({
         status: "error",
         error:
           mode === "mashup"
             ? "Load a beat bed and a lyrics track first."
-            : "Load the song and a new beat first.",
+            : "Load a song first — the AI DJ will bring the beat.",
         statusText:
-          mode === "mashup" ? "Need beats and lyrics." : "Need song and new beat.",
+          mode === "mashup" ? "Need beats and lyrics." : "Need a song.",
       });
       return;
     }
@@ -410,7 +501,6 @@ export const useBooth = create<BoothState>((set, get) => ({
 
   playMash: async () => {
     const { plan, mode, needsUpgrade } = get();
-    // Don't re-trigger AI planner from Play when paywalled — use local.
     if (needsUpgrade) {
       await get().runLocalMix();
       return;

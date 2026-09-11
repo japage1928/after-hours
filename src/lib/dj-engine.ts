@@ -146,6 +146,21 @@ export class DjEngine {
     return () => this.ticks.delete(fn);
   }
 
+  /** Sample rate of the live audio context (after ensure()). */
+  sampleRate(): number {
+    return this.ctx?.sampleRate ?? 44100;
+  }
+
+  /** Create an empty buffer in the live context. */
+  createBuffer(
+    channels: number,
+    length: number,
+    sampleRate: number,
+  ): AudioBuffer {
+    if (!this.ctx) throw new Error("Audio is not ready.");
+    return this.ctx.createBuffer(channels, length, sampleRate);
+  }
+
   async ensure(): Promise<void> {
     if (typeof window === "undefined") return;
     if (this.ctx) {
@@ -203,6 +218,21 @@ export class DjEngine {
   loadUpload(id: DeckId, buffer: AudioBuffer, name: string, guess?: BpmGuess) {
     const g = guess ?? detectBpm(buffer);
     this.setBuffer(id, buffer, name.replace(/\.[^.]+$/, ""), g.bpm, false, g);
+  }
+
+  /** Load a looping AI DJ beat bed onto a deck. */
+  loadAiBeat(
+    id: DeckId,
+    buffer: AudioBuffer,
+    name: string,
+    bpm: number,
+    peaks?: number[],
+  ) {
+    this.setBuffer(id, buffer, name, bpm, true, {
+      bpm,
+      offset: 0,
+      peaks: peaks ?? waveformPeaks(buffer),
+    });
   }
 
   setBuffer(
