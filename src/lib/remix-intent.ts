@@ -9,6 +9,12 @@ import {
   type AceStepJob,
   type AceStepResult,
 } from "@/lib/ace-step";
+import {
+  mergeVerdicts,
+  qaAceStepJob,
+  qaAceStepRaw,
+  qaBriefFit,
+} from "@/lib/ace-step-qa";
 import { GROOVE_STYLES, type GrooveStyle } from "@/lib/ai-beat";
 
 /**
@@ -189,31 +195,147 @@ Return JSON:
     },
   );
 
-/** Execute ACE-Step with an interpreted job. */
+/** Execute ACE-Step with automated QA; regenerate once on hard failure. */
 export const runAceStepJob = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => AceStepJobSchema.parse(input))
+  .validator((input: unknown) =>
+    z
+      .object({
+        job: AceStepJobSchema,
+        brief: z.string().max(400).optional(),
+        genreLabel: z.string().max(40).optional(),
+        /** Client asks for a second attempt after buffer QA failed. */
+        forceRetry: z.boolean().optional(),
+      })
+      .parse(input),
+  )
   .handler(
     async ({
       data,
     }): Promise<
-      { ok: true; result: AceStepResult } | { ok: false; error: string }
+      | {
+          ok: true;
+          result: AceStepResult;
+          qa: { passed: true; reasons: string[]; regenerated: boolean };
+        }
+      | {
+          ok: false;
+          error: string;
+          qa: { passed: false; reasons: string[]; regenerated: boolean };
+        }
     > => {
       if (!aceStepConfigured()) {
         return {
           ok: false,
           error: "ACE-Step is not configured on this deploy.",
+          qa: { passed: false, reasons: ["not_configured"], regenerated: false },
         };
       }
-      try {
-        const result = await generateWithAceStep(data);
-        return { ok: true, result };
-      } catch (err) {
+
+      const pre = qaAceStepJob(data.job, data.brief);
+      if (!pre.ok) {
         return {
           ok: false,
-          error:
-            err instanceof Error ? err.message : "ACE-Step generation failed.",
+          error: pre.reasons[0] || "Remix brief failed QA.",
+          qa: { passed: false, reasons: pre.reasons, regenerated: false },
         };
       }
+
+      // Soft brief-fit — nudge caption if mismatch, don't hard-fail.
+      if (data.brief && data.genreLabel) {
+        const fit = await qaBriefFit({
+          brief: data.brief,
+          genreLabel: data.genreLabel,
+          job: data.job,
+        });
+        if (!fit.ok && fit.reasons[0]) {
+          data.job = {
+            ...data.job,
+            caption: `${data.genreLabel} remix, ${data.brief}. ${data.job.caption}`.slice(
+              0,
+              1200,
+            ),
+          };
+        }
+      }
+
+      const attempt = async (
+        job: AceStepJob,
+        regenerated: boolean,
+      ): Promise<
+        | {
+            ok: true;
+            result: AceStepResult;
+            qa: { passed: true; reasons: string[]; regenerated: boolean };
+          }
+        | {
+            ok: false;
+            error: string;
+            qa: { passed: false; reasons: string[]; regenerated: boolean };
+          }
+      > => {
+        try {
+          const result = await generateWithAceStep(job);
+          const raw = qaAceStepRaw(result);
+          if (!raw.ok) {
+            return {
+              ok: false,
+              error: raw.reasons[0] || "ACE-Step audio failed QA.",
+              qa: {
+                passed: false,
+                reasons: raw.reasons,
+                regenerated,
+              },
+            };
+          }
+          return {
+            ok: true,
+            result,
+            qa: {
+              passed: true,
+              reasons: mergeVerdicts(pre, raw).reasons,
+              regenerated,
+            },
+          };
+        } catch (err) {
+          return {
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "ACE-Step generation failed.",
+            qa: { passed: false, reasons: ["generate_error"], regenerated },
+          };
+        }
+      };
+
+      const first = await attempt(data.job, false);
+      if (first.ok) return first;
+
+      // One regenerate with a tightened caption.
+      const second = await attempt(
+        {
+          ...data.job,
+          caption:
+            `${data.job.caption}. Clean mix, strong kick, no silence, full duration.`.slice(
+              0,
+              1200,
+            ),
+        },
+        true,
+      );
+      if (second.ok) return second;
+
+      return {
+        ok: false,
+        error: second.error || first.error,
+        qa: {
+          passed: false,
+          reasons: [
+            ...first.qa.reasons,
+            ...second.qa.reasons,
+            data.forceRetry ? "client_retry_exhausted" : "server_retry_exhausted",
+          ],
+          regenerated: true,
+        },
+      };
     },
   );

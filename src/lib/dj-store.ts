@@ -6,12 +6,14 @@ import {
 } from "@/lib/audio-file";
 import {
   aiBeatDeckName,
+  grooveLabel,
   remixBpmForStyle,
   renderAiBeat,
   syntheticPeaks,
   type GrooveStyle,
 } from "@/lib/ai-beat";
 import { decodeAceStepAudio } from "@/lib/ace-step";
+import { qaAudioBuffer } from "@/lib/ace-step-qa";
 import {
   interpretRemixIntent,
   runAceStepJob,
@@ -187,33 +189,56 @@ async function ensureRemixBeat(
       });
 
       if (intent.aceStepReady) {
-        set({ statusText: "ACE-Step generating the remix bed…" });
-        const gen = await runAceStepJob({ data: intent.job });
-        if (gen.ok) {
-          const ctx = (
-            djEngine as unknown as { ctx: AudioContext | null }
-          ).ctx;
-          // Use engine decode via temporary path: ensure + Offline-safe decode helper
+        set({ statusText: "ACE-Step generating + QA…" });
+        const genre = grooveLabel(grooveStyle);
+        const tryArm = async (forceRetry: boolean): Promise<boolean> => {
+          const gen = await runAceStepJob({
+            data: {
+              job: intent.job,
+              brief,
+              genreLabel: genre,
+              forceRetry,
+            },
+          });
+          if (!gen.ok) {
+            set({
+              statusText: `${gen.error} — using local genre bed.`,
+            });
+            return false;
+          }
           await djEngine.ensure();
-          const liveCtx = (
-            globalThis as unknown as { AudioContext?: typeof AudioContext }
-          ).AudioContext
-            ? // pull the live context through a tiny decode using the engine's sample rate
-              null
-            : null;
-          void liveCtx;
           const audioCtx = new AudioContext({
             sampleRate: djEngine.sampleRate(),
           });
           try {
             const buffer = await decodeAceStepAudio(audioCtx, gen.result);
-            const bpm = Math.round(gen.result.bpm || intent.job.bpm || deckA.bpm);
+            const bufferQa = qaAudioBuffer(buffer, {
+              minDurationSec: Math.min(12, (intent.job.durationSec ?? 32) * 0.35),
+              maxDurationSec: Math.max(120, (intent.job.durationSec ?? 60) * 1.5),
+            });
+            if (!bufferQa.ok) {
+              set({
+                statusText: `QA rejected audio (${bufferQa.reasons[0]})…`,
+              });
+              await audioCtx.close().catch(() => undefined);
+              if (!forceRetry && !gen.qa.regenerated) {
+                set({ statusText: "Re-rolling ACE-Step after QA…" });
+                return tryArm(true);
+              }
+              set({
+                statusText: `QA failed after retry — using local genre bed.`,
+              });
+              return false;
+            }
+            const bpm = Math.round(
+              gen.result.bpm || intent.job.bpm || deckA.bpm,
+            );
             const name = `ACE · ${intent.job.summary}`.slice(0, 48);
             djEngine.loadAiBeat("b", buffer, name, bpm, syntheticPeaks(buffer));
             set({
               aiBeatActive: true,
               usedAi: true,
-              statusText: `${name} armed`,
+              statusText: `${name} armed · QA passed`,
               cue: intent.job.summary,
               ...snapshot(),
             });
@@ -221,16 +246,14 @@ async function ensureRemixBeat(
             return true;
           } catch {
             await audioCtx.close().catch(() => undefined);
-            // fall through to synth bed
             set({
-              statusText: "ACE-Step audio decode failed — using local genre bed.",
+              statusText: "ACE-Step decode failed — using local genre bed.",
             });
+            return false;
           }
-        } else {
-          set({
-            statusText: `${gen.error} — using local genre bed.`,
-          });
-        }
+        };
+
+        if (await tryArm(false)) return true;
       }
     } else {
       jobSummary = intent.job.summary;
