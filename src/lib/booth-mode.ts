@@ -35,7 +35,7 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
     eyebrow: "AI generate",
     title: "Describe a song. Get a song.",
     blurb:
-      "Prompt, pick a style, optionally paste lyrics. After Hours generates a full track you can play and download — ACE-Step via Replicate, labeled honestly. Not Suno.",
+      "Prompt, pick a style, optionally paste lyrics. AI generation powered by ACE-Step (via Replicate), labeled honestly. Not Suno. Not Demucs.",
     actionIdle: "Write a prompt first",
     actionBusy: "Generating your song…",
     briefLabel: "Song prompt",

@@ -2,15 +2,23 @@
 
 **Generate an AI song in the browser** — prompt, play, download. That’s the product.
 
-Remix and mashup still exist in the booth; mashup work is deferred.
+## Architecture (read this if you expected Demucs)
 
-Generation is **ACE-Step via Replicate** (not Suno). Optional self-hosted override: `ACE_STEP_BASE_URL`.
+| Piece | What it actually is | Needed to sell songs? |
+| --- | --- | --- |
+| **ACE-Step via Replicate** | Text → full song (Generate / AI Remix). Default model `fishaudio/ace-step-1.5`. | **Yes.** Set `REPLICATE_API_TOKEN` on Vercel Production. |
+| **`ACE_STEP_BASE_URL`** | Optional self-hosted OpenAI-compat ACE-Step host. | **No.** Production does not have this, and does not need it. |
+| **Demucs** | Stem split (vocals vs instrumental) from old Mashup Pro / `main`. | **No.** Not used on this branch. Do not add it. |
+| **Mashup** | Client bounce: beats of one owned track × lyrics of another. | Works with zero AI env vars. |
+| **Stripe / auth** | Checkout + Better Auth. | Already set in Production. |
+
+Missing `ACE_STEP_*` on Production is expected. The only Generate blocker is `REPLICATE_API_TOKEN`.
 
 ## Session one
 
 Cold signup → Generate booth → prompt/style → generate → play + download.
 
-- **Generate** needs `REPLICATE_API_TOKEN` on Vercel (or `ACE_STEP_BASE_URL`). There is no fake song.
+- **Generate** needs `REPLICATE_API_TOKEN` on Vercel. There is no fake song.
 - Free accounts get **2 AI generates per month**. Paywall after those jobs, then Stripe Checkout.
 - Finished generates save to **Library** (`/projects`).
 
@@ -19,31 +27,34 @@ Cold signup → Generate booth → prompt/style → generate → play + download
 1. Prompt (required), style chips, length (~30 / ~60 / ~90s), optional lyrics, optional instrumental.
 2. **xAI** (if `XAI_API_KEY` is set) translates that into an ACE-Step caption + lyrics. Otherwise a local brief is used.
 3. **ACE-Step** generates the audio:
-   - Default: Replicate model `fishaudio/ace-step-1.5` using `REPLICATE_API_TOKEN`
-   - Override: `ACE_STEP_BASE_URL` (OpenAI-compat host) if set
+   - Default: Replicate `fishaudio/ace-step-1.5` using only `REPLICATE_API_TOKEN`
+   - Optional: `lucataco/ace-step` (v1, `tags` instead of `prompt`) via `ACE_STEP_REPLICATE_MODEL`
+   - Optional override: `ACE_STEP_BASE_URL` (OpenAI-compat host) if you self-host — wins over Replicate
 4. Play + download. Track is saved to the on-device library.
+
+UI copy when Replicate is live: **AI generation powered by ACE-Step (via Replicate)**.
 
 ## Env vars
 
 | Var | Used for |
 | --- | --- |
-| `REPLICATE_API_TOKEN` | **Required to go live.** ACE-Step via Replicate for Generate. |
+| `REPLICATE_API_TOKEN` | **Required to go live.** ACE-Step via Replicate for Generate. Create at https://replicate.com/account/api-tokens and add a payment method. |
 | `ACE_STEP_REPLICATE_MODEL` | Optional. Default `fishaudio/ace-step-1.5`. |
-| `ACE_STEP_BASE_URL` | Optional self-hosted ACE-Step host (used instead of Replicate if set). |
-| `ACE_STEP_API_KEY` / `ACE_STEP_MODEL` | Optional for the self-hosted host. |
+| `ACE_STEP_BASE_URL` | Optional self-hosted ACE-Step host (used instead of Replicate if set). **Not required.** |
+| `ACE_STEP_API_KEY` / `ACE_STEP_MODEL` | Optional for the self-hosted host only. |
 | `XAI_API_KEY` | Optional prompt translator; local briefs work without it. |
 | `DATABASE_URL` / `POSTGRES_URL` | Supabase Postgres for Better Auth + billing. |
 | `VITE_AUTH_ENABLED` | `true` on Vercel so sign-in is on. |
 | `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` | Auth. |
 | `STRIPE_*` | Checkout + portal (already set in production). |
 
-**To go live:** set `REPLICATE_API_TOKEN` on Vercel Production (Stripe is already set). Mashup deferred.
+**To go live:** Vercel → Production → Environment Variables → add `REPLICATE_API_TOKEN` → Redeploy. Optional: `XAI_API_KEY`. Do not wait on `ACE_STEP_*` or Demucs.
 
 ## Gaps vs Suno
 
 - Engine is ACE-Step via Replicate, not Suno — different model, no custom personas, no social feed, no stems marketplace.
-- Remix (if used) shares the same ACE-Step engine; it is not neural stem split.
-- Mashup is deferred.
+- Remix shares the same ACE-Step engine; it is not neural stem split / Demucs.
+- Mashup is on-device EQ bounce of two owned tracks.
 - No TikTok / Facebook login.
 
 ## Run locally
@@ -75,7 +86,7 @@ Primary path. Supabase project **`after-hours`** (`qrhnoypojhkjkmzlhjfl`, `us-ea
 
 1. Import this GitHub repo into [Vercel](https://vercel.com/new).
 2. Preferred: Vercel project → **Integrations → Supabase** → link **after-hours**.
-3. Or set env vars manually (`REPLICATE_API_TOKEN`, `DATABASE_URL`, `VITE_AUTH_ENABLED=true`, Stripe keys). Optional: `XAI_API_KEY`, `ACE_STEP_BASE_URL`.
+3. Or set env vars manually (`REPLICATE_API_TOKEN`, `DATABASE_URL`, `VITE_AUTH_ENABLED=true`, Stripe keys). Optional: `XAI_API_KEY`. Do not set `ACE_STEP_BASE_URL` unless you self-host.
 4. Redeploy. Build runs `db:migrate` against Supabase.
 
 Project URL: `https://qrhnoypojhkjkmzlhjfl.supabase.co`

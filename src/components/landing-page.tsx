@@ -67,7 +67,8 @@ export function LandingPage() {
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
               Generate an AI song in the browser — prompt, play, download.
-              Powered by ACE-Step via Replicate. Two songs free this month.
+              AI generation powered by ACE-Step (via Replicate). Two songs free
+              this month.
             </p>
             <Link
               to={user ? "/generate" : "/login"}

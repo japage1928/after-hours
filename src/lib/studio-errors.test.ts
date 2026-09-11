@@ -71,9 +71,9 @@ describe("capabilityCopy", () => {
       backend: "replicate",
       model: "fishaudio/ace-step-1.5",
     });
-    assert.match(label, /ACE-Step/);
-    assert.match(label, /Replicate/);
+    assert.match(label, /powered by ACE-Step \(via Replicate\)/);
     assert.doesNotMatch(label, /Suno/i);
+    assert.doesNotMatch(label, /Demucs/i);
   });
 
   it("gives the owner a setup hint and users a friendly unavailable line", () => {
@@ -84,6 +84,7 @@ describe("capabilityCopy", () => {
     });
     assert.match(owner.engineLabel, /not configured/i);
     assert.match(owner.setupHint ?? "", /REPLICATE_API_TOKEN/);
+    assert.match(owner.setupHint ?? "", /do not need ACE_STEP_BASE_URL/i);
 
     const user = capabilityCopy({
       aceStep: false,
@@ -101,7 +102,7 @@ describe("capabilityCopy", () => {
       owner: true,
       backend: "host",
     });
-    assert.match(label, /GPU host/);
+    assert.match(label, /powered by ACE-Step \(self-hosted\)/);
     assert.doesNotMatch(label, /Suno/i);
   });
 });

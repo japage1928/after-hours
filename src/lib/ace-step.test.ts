@@ -82,7 +82,12 @@ describe("Replicate output parsing", () => {
       audioUrlFromReplicateOutput(["https://replicate.delivery/a.mp3"]),
       "https://replicate.delivery/a.mp3",
     );
-    assert.equal(audioUrlFromReplicateOutput(null), null);
+    assert.equal(
+      audioUrlFromReplicateOutput({
+        audio: ["https://replicate.delivery/a.mp3"],
+      }),
+      "https://replicate.delivery/a.mp3",
+    );
   });
 
   it("guesses mime from the delivery URL", () => {

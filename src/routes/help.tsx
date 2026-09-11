@@ -16,8 +16,8 @@ function HelpPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Need help?</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Generate an AI song in the browser. ACE-Step via Replicate — not
-            Suno.
+            Generate an AI song in the browser. AI generation powered by
+            ACE-Step (via Replicate) — not Suno, not Demucs.
           </p>
         </div>
         <Button asChild variant="secondary">

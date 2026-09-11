@@ -1,11 +1,20 @@
 import { z } from "zod";
 
 /**
- * ACE-Step music generation.
+ * ACE-Step music generation (text → full song). This is NOT Demucs.
  *
- * Default: Replicate (`REPLICATE_API_TOKEN`) — Generate works with only that
- * token on Vercel.
- * Optional override: `ACE_STEP_BASE_URL` for a self-hosted OpenAI-compat host.
+ * Demucs (old Mashup Pro / `main`) splits a mix into stems. After Hours
+ * Generate and AI Remix do not use it. Mashup is a client bounce of two
+ * owned tracks and also does not need Demucs or ACE-Step.
+ *
+ * Default backend: Replicate. John only needs `REPLICATE_API_TOKEN` on
+ * Vercel Production. `ACE_STEP_*` is optional and unused in production.
+ *
+ * Optional override: `ACE_STEP_BASE_URL` for a self-hosted OpenAI-compat host
+ * (`/v1/chat/completions` returning a data-URL). If that env is set, it wins.
+ *
+ * Default model: `fishaudio/ace-step-1.5` (prompt / lyrics / duration / bpm).
+ * Older v1 `lucataco/ace-step` is supported via `ACE_STEP_REPLICATE_MODEL`.
  */
 
 export const AceStepJobSchema = z.object({
@@ -107,20 +116,29 @@ export function replicateInputForJob(
   };
 }
 
+function isAudioDeliveryUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value) || value.startsWith("data:audio");
+}
+
 export function audioUrlFromReplicateOutput(output: unknown): string | null {
-  if (typeof output === "string" && /^https?:\/\//i.test(output)) return output;
+  if (typeof output === "string") {
+    return isAudioDeliveryUrl(output) ? output : null;
+  }
   if (Array.isArray(output)) {
     for (const item of output) {
-      if (typeof item === "string" && /^https?:\/\//i.test(item)) return item;
-      if (item && typeof item === "object" && "url" in item) {
-        const url = (item as { url?: unknown }).url;
-        if (typeof url === "string" && /^https?:\/\//i.test(url)) return url;
+      const found = audioUrlFromReplicateOutput(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (output && typeof output === "object") {
+    const rec = output as Record<string, unknown>;
+    for (const key of ["url", "audio", "song", "file", "music"]) {
+      if (key in rec) {
+        const found = audioUrlFromReplicateOutput(rec[key]);
+        if (found) return found;
       }
     }
-  }
-  if (output && typeof output === "object" && "url" in output) {
-    const url = (output as { url?: unknown }).url;
-    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url;
   }
   return null;
 }
@@ -275,7 +293,14 @@ async function pollPrediction(
   throw new Error("The generator timed out waiting for Replicate.");
 }
 
-async function audioFromUrl(url: string): Promise<{ audioBase64: string; mime: string }> {
+async function audioFromDelivery(
+  url: string,
+): Promise<{ audioBase64: string; mime: string }> {
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw new Error("ACE-Step audio encoding was invalid.");
+    return { mime: match[1] || "audio/mpeg", audioBase64: match[2] || "" };
+  }
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
   if (!res.ok) {
     throw new Error(`ACE-Step returned no audio (${res.status}).`);
@@ -350,7 +375,7 @@ async function generateViaReplicate(
   if (!audioUrl) {
     throw new Error("ACE-Step returned no audio.");
   }
-  const audio = await audioFromUrl(audioUrl);
+  const audio = await audioFromDelivery(audioUrl);
   return {
     ...audio,
     bpm: job.bpm,

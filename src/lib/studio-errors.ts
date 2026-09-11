@@ -1,7 +1,5 @@
 const SETUP_HINT =
-  "Set REPLICATE_API_TOKEN (or ACE_STEP_BASE_URL) on this deployment. Without it, Generate cannot run — we never fake a song.";
-
-const DEFAULT_MODEL = "fishaudio/ace-step-1.5";
+  "Add REPLICATE_API_TOKEN on Vercel Production (replicate.com API token + a payment method). You do not need ACE_STEP_BASE_URL or Demucs. Without the token, Generate cannot run — we never fake a song.";
 
 export function capabilityCopy(opts: {
   aceStep: boolean;
@@ -10,11 +8,10 @@ export function capabilityCopy(opts: {
   model?: string;
 }): { engineLabel: string; setupHint: string | null } {
   if (opts.aceStep) {
-    const model = opts.model?.trim() || DEFAULT_MODEL;
     const engineLabel =
       opts.backend === "host"
-        ? "ACE-Step on your GPU host"
-        : `ACE-Step via Replicate (${model})`;
+        ? "AI generation powered by ACE-Step (self-hosted)"
+        : "AI generation powered by ACE-Step (via Replicate)";
     return { engineLabel, setupHint: null };
   }
   if (opts.owner) {
@@ -59,7 +56,7 @@ export function humanizeStudioError(
   }
   if (t.includes("not configured") || t.includes("ace-step isn’t configured") || t.includes("ace-step isn't configured")) {
     if (owner) {
-      return "Generate needs ACE-Step. Set REPLICATE_API_TOKEN (or ACE_STEP_BASE_URL) in Vercel env, then retry.";
+      return "Generate needs ACE-Step via Replicate. Add REPLICATE_API_TOKEN on Vercel Production (no ACE_STEP_BASE_URL required), then retry.";
     }
     return "AI studio is temporarily unavailable. You can still mashup two tracks on-device.";
   }
