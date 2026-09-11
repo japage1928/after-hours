@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Visualizer } from "@/components/visualizer";
+import { PlansGrid } from "@/components/plans-grid";
 import { AUDIO_FILE_ACCEPT } from "@/lib/audio-file";
 import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { djEngine, type DeckId } from "@/lib/dj-engine";
@@ -38,6 +39,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   const setPrompt = useBooth((s) => s.setPrompt);
   const playing = useBooth((s) => s.playing);
   const dropMix = useBooth((s) => s.dropMix);
+  const runLocalMix = useBooth((s) => s.runLocalMix);
   const playMash = useBooth((s) => s.playMash);
   const stopMix = useBooth((s) => s.stopMix);
   const syncB = useBooth((s) => s.syncB);
@@ -47,6 +49,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   const deckB = useBooth((s) => s.deckB);
   const timeA = useBooth((s) => s.timeA);
   const timeB = useBooth((s) => s.timeB);
+  const needsUpgrade = useBooth((s) => s.needsUpgrade);
   const busy = status === "loading" || status === "planning";
   const ready = deckA.hasTrack && deckB.hasTrack;
 
@@ -160,6 +163,19 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
           <p className="text-sm text-muted">{statusText}</p>
         </div>
         {error ? <p className="text-sm text-rec">{error}</p> : null}
+        {needsUpgrade ? (
+          <div className="flex flex-col gap-4 rounded-xl border border-line bg-bg/60 p-4">
+            <PlansGrid compact paywall />
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={!ready || busy}
+              onClick={() => void runLocalMix()}
+            >
+              Continue with free local mix
+            </Button>
+          </div>
+        ) : null}
         {cue ? (
           <p className="font-display text-xl text-fg/90 italic">{cue}</p>
         ) : null}

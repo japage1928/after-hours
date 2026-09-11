@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { MashPanel } from "@/components/mash-panel";
+import { UsageMeter } from "@/components/usage-meter";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
@@ -13,7 +14,15 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
 
   return (
     <div className="relative min-h-dvh bg-bg text-fg">
-      <header className="sticky top-0 z-20 border-b border-transparent bg-bg">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-64 opacity-40"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 0%, rgb(196 92 74 / 0.16), transparent 70%)",
+        }}
+      />
+      <header className="sticky top-0 z-20 border-b border-transparent bg-bg/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 md:px-8 md:pt-[max(2rem,env(safe-area-inset-top))] md:pb-4">
           <div className="min-w-0">
             <Link
@@ -27,6 +36,10 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <UsageMeter />
+            <Button asChild variant="secondary" className="h-11">
+              <Link to="/pricing">Plans</Link>
+            </Button>
             <Button asChild variant="secondary" className="h-11">
               <Link to="/">Home</Link>
             </Button>
@@ -40,7 +53,7 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
         </div>
       </header>
 
-      <p className="mx-auto max-w-7xl px-4 pb-3 text-sm text-muted md:px-8 md:pb-4">
+      <p className="relative mx-auto max-w-7xl px-4 pb-3 text-sm text-muted md:px-8 md:pb-4">
         {meta.blurb}
       </p>
 

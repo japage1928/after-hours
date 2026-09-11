@@ -27,8 +27,8 @@ export type Plan = {
 export const PLANS: Record<PlanId, Plan> = {
   song: {
     id: "song",
-    name: "Single song",
-    blurb: "One Write-tab song, pay as you go.",
+    name: "Single mix",
+    blurb: "One AI DJ plan — mash or remix when you need it.",
     priceCents: 299,
     kind: "one_time",
     usageBudgetCents: 0,
@@ -38,7 +38,7 @@ export const PLANS: Record<PlanId, Plan> = {
   basic: {
     id: "basic",
     name: "Basic",
-    blurb: "Monthly booth with $3 of AI writing included.",
+    blurb: "Monthly booth with $3 of AI DJ planning included.",
     priceCents: 999,
     kind: "subscription",
     usageBudgetCents: 300,
@@ -48,7 +48,7 @@ export const PLANS: Record<PlanId, Plan> = {
   plus: {
     id: "plus",
     name: "Plus",
-    blurb: "More room to write — $6 of AI included each month.",
+    blurb: "More late nights — $6 of AI planning each month.",
     priceCents: 1999,
     kind: "subscription",
     usageBudgetCents: 600,
@@ -58,7 +58,7 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    blurb: "Full late-night run — $9 of AI included each month.",
+    blurb: "Full run — $9 of AI DJ planning included each month.",
     priceCents: 2999,
     kind: "subscription",
     usageBudgetCents: 900,

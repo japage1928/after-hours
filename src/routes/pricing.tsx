@@ -1,91 +1,39 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  getBillingCatalog,
-  getMyBilling,
-  startBillingPortal,
-  startCheckout,
-} from "@/lib/billing/billing-api";
+import { PlansGrid } from "@/components/plans-grid";
+import { startBillingPortal } from "@/lib/billing/billing-api";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { UserButton } from "@/lib/auth/gates";
 
 export const Route = createFileRoute("/pricing")({
   component: PricingPage,
 });
 
-type CatalogPlan = {
-  id: "song" | "basic" | "plus" | "pro";
-  name: string;
-  blurb: string;
-  priceCents: number;
-  priceLabel: string;
-  kind: "one_time" | "subscription";
-  usageBudgetCents: number;
-  usageBudgetLabel: string | null;
-  songCredits: number;
-};
-
 function PricingPage() {
   const user = useCurrentUser();
-  const [plans, setPlans] = useState<CatalogPlan[]>([]);
-  const [stripeReady, setStripeReady] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [entitlement, setEntitlement] = useState<{
-    usageUsedCents: number;
-    usageBudgetCents: number;
-    songCredits: number;
-    planId?: string | null;
-    ok: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      const catalog = await getBillingCatalog();
-      setPlans(catalog.plans as CatalogPlan[]);
-      setStripeReady(catalog.stripeReady);
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!user || user.isDevFallback) return;
-    void (async () => {
-      try {
-        const mine = await getMyBilling();
-        setEntitlement(mine.entitlement);
-      } catch {
-        /* signed-out race */
-      }
-    })();
-  }, [user]);
-
-  async function buy(planId: CatalogPlan["id"]) {
-    setError(null);
-    if (!user || user.isDevFallback) {
-      window.location.assign("/login");
-      return;
-    }
-    setBusy(planId);
-    try {
-      const { url } = await startCheckout({ data: { planId } });
-      window.location.assign(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
-      setBusy(null);
-    }
-  }
 
   async function openPortal() {
     setError(null);
-    setBusy("portal");
+    setBusy(true);
     try {
       const { url } = await startBillingPortal();
       window.location.assign(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open billing portal");
-      setBusy(null);
+      setError(err instanceof Error ? err.message : "Could not open portal");
+      setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "cancel") {
+      setError("Checkout canceled — pick a plan whenever you’re ready.");
+    }
+  }, []);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-8 px-4 py-10 md:px-8">
@@ -94,85 +42,32 @@ function PricingPage() {
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
             After Hours
           </p>
-          <h1 className="font-display text-4xl text-fg md:text-5xl">Pricing</h1>
+          <h1 className="font-display text-4xl text-fg md:text-5xl">Plans</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            The studio is free to open. Pay only when you use AI — a single song
-            is $2.99, or pick a monthly plan with included writing.
+            The booth opens free. AI DJ planning uses a mix credit or a monthly
+            plan with included usage. Cancel anytime from Billing.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="secondary">
-            <Link to={user ? "/" : "/login"}>{user ? "Studio" : "Sign in"}</Link>
+            <Link to="/">Home</Link>
           </Button>
           {user && !user.isDevFallback ? (
             <Button
               variant="secondary"
-              disabled={busy === "portal" || !stripeReady}
+              disabled={busy}
               onClick={() => void openPortal()}
             >
-              Manage billing
+              {busy ? "Opening…" : "Manage billing"}
             </Button>
           ) : null}
+          {user ? <UserButton /> : null}
         </div>
       </header>
 
-      {!stripeReady ? (
-        <p className="rounded-2xl bg-surface p-4 text-sm text-muted shadow-border">
-          Checkout isn’t available yet — Stripe still needs to be configured on this
-          deploy yet.
-        </p>
-      ) : null}
-
-      {entitlement ? (
-        <p className="text-sm text-muted">
-          Your booth:{" "}
-          {entitlement.songCredits > 0
-            ? `${entitlement.songCredits} song credit(s)`
-            : entitlement.usageBudgetCents > 0
-              ? `${(entitlement.usageUsedCents / 100).toFixed(2)} / ${(entitlement.usageBudgetCents / 100).toFixed(2)} included AI this period`
-              : "no plan yet — mash for free, upgrade when you write with AI"}
-        </p>
-      ) : null}
-
       {error ? <p className="text-sm text-rec">{error}</p> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {plans.map((plan) => (
-          <section
-            key={plan.id}
-            className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border"
-          >
-            <div>
-              <h2 className="font-display text-2xl text-fg">{plan.name}</h2>
-              <p className="mt-1 text-sm text-muted">{plan.blurb}</p>
-            </div>
-            <p className="font-display text-3xl text-fg">
-              {plan.priceLabel}
-              {plan.kind === "subscription" ? (
-                <span className="text-base text-muted"> / mo</span>
-              ) : null}
-            </p>
-            {plan.usageBudgetLabel ? (
-              <p className="text-xs text-subtle">
-                Includes {plan.usageBudgetLabel} AI writing / month
-              </p>
-            ) : (
-              <p className="text-xs text-subtle">Includes 1 song credit</p>
-            )}
-            <Button
-              className="mt-auto w-full"
-              disabled={Boolean(busy) || !stripeReady}
-              onClick={() => void buy(plan.id)}
-            >
-              {busy === plan.id
-                ? "Redirecting…"
-                : plan.kind === "subscription"
-                  ? "Start plan"
-                  : "Buy song"}
-            </Button>
-          </section>
-        ))}
-      </div>
+      <PlansGrid paywall />
     </div>
   );
 }

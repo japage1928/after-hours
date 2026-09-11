@@ -47,7 +47,7 @@ export function UsageMeter() {
     <Link
       to="/pricing"
       className="hidden items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted shadow-border transition-colors hover:text-fg sm:flex"
-      title="AI usage — upgrade when you need more writing"
+      title="AI DJ usage — upgrade when you need more planning"
     >
       <span
         className="relative grid size-8 place-items-center"
@@ -83,7 +83,7 @@ export function UsageMeter() {
             <span className="block font-medium text-fg">
               {credits} song credit{credits === 1 ? "" : "s"}
             </span>
-            <span className="text-subtle">Ready to write</span>
+            <span className="text-subtle">Ready to mix</span>
           </>
         ) : budget > 0 ? (
           <>
@@ -96,8 +96,8 @@ export function UsageMeter() {
           </>
         ) : (
           <>
-            <span className="block font-medium text-fg">AI on demand</span>
-            <span className="text-subtle">Plans when you write</span>
+            <span className="block font-medium text-fg">Unlock AI DJ</span>
+            <span className="text-subtle">View plans</span>
           </>
         )}
       </span>

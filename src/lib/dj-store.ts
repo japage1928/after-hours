@@ -21,6 +21,7 @@ type BoothState = {
   prompt: string;
   cue: string | null;
   plan: MixPlan | null;
+  needsUpgrade: boolean;
   xfader: number;
   playing: boolean;
   playingA: boolean;
@@ -44,6 +45,7 @@ type BoothState = {
   seekDeck: (id: DeckId, seconds: number) => void;
   syncB: () => void;
   dropMix: () => Promise<void>;
+  runLocalMix: () => Promise<void>;
   playMash: () => Promise<void>;
   stopMix: () => void;
 };
@@ -74,6 +76,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   prompt: "",
   cue: null,
   plan: null,
+  needsUpgrade: false,
   xfader: -0.15,
   playing: false,
   playingA: false,
@@ -210,7 +213,13 @@ export const useBooth = create<BoothState>((set, get) => ({
       return;
     }
     studioEngine.stop();
-    set({ status: "planning", statusText: "Mashing the two songs", error: null, cue: null });
+    set({
+      status: "planning",
+      statusText: "Mashing the two songs",
+      error: null,
+      cue: null,
+      needsUpgrade: false,
+    });
     const input = {
       nameA: deckA.name,
       nameB: deckB.name,
@@ -221,17 +230,61 @@ export const useBooth = create<BoothState>((set, get) => ({
       prompt: prompt.trim(),
     };
     let plan: MixPlan = fallbackPlan(input);
+    let needsUpgrade = false;
     try {
       const res = await planMix({ data: input });
-      if (res.ok) plan = res.plan;
+      plan = res.plan;
+      if (!res.ok && "needsUpgrade" in res && res.needsUpgrade) {
+        needsUpgrade = true;
+        set({
+          plan,
+          cue: null,
+          needsUpgrade: true,
+          status: "idle",
+          statusText: "AI planning needs a plan — pick one below.",
+          error: res.error,
+        });
+        return;
+      }
     } catch {
       /* local plan */
     }
     set({
       plan,
       cue: plan.cue,
+      needsUpgrade,
       status: "mixing",
       statusText: plan.cue,
+      error: null,
+    });
+    await djEngine.runPlan(plan);
+    set(snapshot());
+  },
+
+  runLocalMix: async () => {
+    const { deckA, deckB, prompt } = get();
+    if (!deckA.hasTrack || !deckB.hasTrack) {
+      set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." });
+      return;
+    }
+    studioEngine.stop();
+    const input = {
+      nameA: deckA.name,
+      nameB: deckB.name,
+      bpmA: deckA.bpm,
+      bpmB: deckB.bpm,
+      durationA: deckA.duration,
+      durationB: deckB.duration,
+      prompt: prompt.trim(),
+    };
+    const plan = fallbackPlan(input);
+    set({
+      plan,
+      cue: plan.cue,
+      needsUpgrade: false,
+      status: "mixing",
+      statusText: plan.cue,
+      error: null,
     });
     await djEngine.runPlan(plan);
     set(snapshot());

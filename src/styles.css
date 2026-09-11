@@ -120,6 +120,15 @@
   .landing-rise-delay {
     animation: landing-rise 1s ease-out 0.12s both;
   }
+
+  .landing-hero-image {
+    animation: landing-hero- ken 22s ease-in-out infinite alternate;
+    transform-origin: center center;
+  }
+
+  .landing-plans-rise {
+    animation: landing-rise 0.85s ease-out both;
+  }
 }
 
 @keyframes landing-glow-shift {
@@ -141,6 +150,15 @@
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes landing-hero-ken {
+  from {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.1) translate3d(-1.5%, 1%, 0);
   }
 }
 

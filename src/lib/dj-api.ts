@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { authMiddleware } from "@/lib/auth/middleware";
+import { assertAiAllowed, chargeAfterMix } from "@/lib/billing/gate";
 
 /**
  * Intelligent two-deck remix plan using real DJ technique:
@@ -125,16 +127,38 @@ function extractJson(text: string): unknown {
 }
 
 export const planMix = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((input: unknown) => PlanMixInputSchema.parse(input))
   .handler(
     async ({
       data,
+      context,
     }): Promise<
-      { ok: true; plan: MixPlan } | { ok: false; error: string; plan: MixPlan }
+      | { ok: true; plan: MixPlan; usedAi: boolean }
+      | {
+          ok: false;
+          error: string;
+          plan: MixPlan;
+          needsUpgrade: boolean;
+          usedAi: false;
+        }
     > => {
       const local = fallbackPlan(data);
+      const blocked = await assertAiAllowed(context.userId);
+      if (blocked) {
+        return {
+          ok: false,
+          error: blocked,
+          plan: local,
+          needsUpgrade: true,
+          usedAi: false,
+        };
+      }
+
       const apiKey = process.env.XAI_API_KEY;
-      if (!apiKey) return { ok: true, plan: local };
+      if (!apiKey) {
+        return { ok: true, plan: local, usedAi: false };
+      }
 
       try {
         const res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -187,7 +211,7 @@ Offsets must fit each track. mixInSec + crossfadeSec must fit remaining A.`,
             ],
           }),
         });
-        if (!res.ok) return { ok: true, plan: local };
+        if (!res.ok) return { ok: true, plan: local, usedAi: false };
         const json = (await res.json()) as {
           choices?: { message?: { content?: string } }[];
         };
@@ -206,9 +230,14 @@ Offsets must fit each track. mixInSec + crossfadeSec must fit remaining A.`,
           ),
           crossfadeSec: Math.min(parsed.crossfadeSec, 32),
         };
-        return { ok: true, plan };
+        try {
+          await chargeAfterMix(context.userId);
+        } catch {
+          /* plan still usable; ledger may fail transiently */
+        }
+        return { ok: true, plan, usedAi: true };
       } catch {
-        return { ok: true, plan: local };
+        return { ok: true, plan: local, usedAi: false };
       }
     },
   );

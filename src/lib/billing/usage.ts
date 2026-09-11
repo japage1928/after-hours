@@ -126,7 +126,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
     return {
       ok: false,
       reason:
-        "AI usage for this billing period is used up. Buy a single song or upgrade your plan.",
+        "AI usage for this billing period is used up. Buy a mix credit or upgrade your plan.",
       source: "subscription",
       planId: (planById(sub.plan_id)?.id as PlanId) ?? null,
       usageUsedCents: used,
@@ -139,7 +139,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
 
   return {
     ok: false,
-    reason: "Buy a song credit or start a plan to use AI writing features.",
+    reason: "Buy a mix credit or start a plan to use AI DJ planning.",
     usageUsedCents: 0,
     usageBudgetCents: 0,
     songCredits: 0,
