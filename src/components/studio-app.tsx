@@ -96,6 +96,9 @@ export function StudioApp() {
                 <Link to="/admin">Admin</Link>
               </Button>
             ) : null}
+            <Button asChild variant="secondary" className="h-11">
+              <Link to="/pricing">Pricing</Link>
+            </Button>
             {user ? (
               <UserButton />
             ) : (

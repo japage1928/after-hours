@@ -9,6 +9,12 @@ import {
 import { uid } from "@/lib/utils";
 import { vocalistById, VOCALISTS } from "@/lib/vocalists";
 import { genreById } from "@/lib/genres";
+import { authMiddleware } from "@/lib/auth/middleware";
+import {
+  assertAiAllowed,
+  chargeAfterLyrics,
+  chargeAfterVocal,
+} from "@/lib/billing/gate";
 
 const MINOR_SEX =
   /\b(child|children|kid|kids|minor|minors|underage|teen|teens|teenage|preteen|loli|pedo)\b/i;
@@ -39,8 +45,12 @@ function syllableBudget(bars: number, bpm: number, mode: string): string {
 }
 
 export const generateSong = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((input: unknown) => GenerateInputSchema.parse(input))
-  .handler(async ({ data }): Promise<{ ok: true; song: Song } | { ok: false; error: string }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; song: Song } | { ok: false; error: string }> => {
+    const blocked = await assertAiAllowed(context.userId);
+    if (blocked) return { ok: false, error: blocked };
+
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: false, error: "AI is not available in this environment." };
 
@@ -199,6 +209,17 @@ JSON shape:
         sections,
         createdAt: new Date().toISOString(),
       });
+      try {
+        await chargeAfterLyrics(context.userId);
+      } catch (chargeErr) {
+        return {
+          ok: false,
+          error:
+            chargeErr instanceof Error
+              ? chargeErr.message
+              : "Could not record usage for this song.",
+        };
+      }
       return { ok: true, song };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not write the cut.";
@@ -230,11 +251,16 @@ function speakScript(
 }
 
 export const renderVocal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((input: unknown) => RenderVocalInputSchema.parse(input))
   .handler(
     async ({
       data,
+      context,
     }): Promise<{ ok: true; audio: string; mime: string } | { ok: false; error: string }> => {
+      const blocked = await assertAiAllowed(context.userId);
+      if (blocked) return { ok: false, error: blocked };
+
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) return { ok: false, error: "AI is not available in this environment." };
 
@@ -272,13 +298,24 @@ export const renderVocal = createServerFn({ method: "POST" })
       };
 
       try {
+        let out: { audio: string; mime: string };
         try {
-          const out = await run();
-          return { ok: true, ...out };
+          out = await run();
         } catch {
-          const out = await run();
-          return { ok: true, ...out };
+          out = await run();
         }
+        try {
+          await chargeAfterVocal(context.userId, data.text);
+        } catch (chargeErr) {
+          return {
+            ok: false,
+            error:
+              chargeErr instanceof Error
+                ? chargeErr.message
+                : "Could not record usage for this vocal.",
+          };
+        }
+        return { ok: true, ...out };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not render vocals.";
         return { ok: false, error: message };
