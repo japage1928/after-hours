@@ -9,7 +9,7 @@ import {
   remixCapWithinBudget,
   stripePriceIdForPlan,
 } from "./plans.ts";
-import { currentMonthWindow, currentWeekWindow } from "./usage.ts";
+import { currentMonthWindow, currentWeekWindow } from "./quota-windows.ts";
 
 describe("pricing catalog", () => {
   it("locks retail prices, remix caps, and ~30% cost budgets", () => {
