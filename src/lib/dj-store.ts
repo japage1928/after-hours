@@ -11,6 +11,11 @@ import {
   syntheticPeaks,
   type GrooveStyle,
 } from "@/lib/ai-beat";
+import { decodeAceStepAudio } from "@/lib/ace-step";
+import {
+  interpretRemixIntent,
+  runAceStepJob,
+} from "@/lib/remix-intent";
 import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
@@ -120,12 +125,12 @@ async function runEnginePlan(
   if (gen === mixGeneration) set(snapshot());
 }
 
-/** Remix: put a looping AI beat on B, locked to the song BPM. */
+/** Remix: interpret plain English → ACE-Step (or local genre beat fallback). */
 async function ensureRemixBeat(
   get: () => BoothState,
   set: (partial: Partial<BoothState>) => void,
 ): Promise<boolean> {
-  const { deckA, grooveStyle, aiBeatActive, deckB } = get();
+  const { deckA, grooveStyle, aiBeatActive, deckB, prompt } = get();
   if (!deckA.hasTrack) {
     set({
       status: "error",
@@ -138,6 +143,103 @@ async function ensureRemixBeat(
   if (deckB.hasTrack && !aiBeatActive) return true;
 
   await djEngine.ensure();
+  set({
+    status: "planning",
+    statusText: "Reading your remix brief…",
+    error: null,
+  });
+
+  const brief =
+    prompt.trim() ||
+    `Make a ${grooveStyle} remix of this track — fresh drums, same energy.`;
+
+  let jobSummary = brief;
+  let usedIntentAi = false;
+
+  try {
+    const intent = await interpretRemixIntent({
+      data: {
+        brief,
+        genre: grooveStyle,
+        songName: deckA.name,
+        songBpm: deckA.bpm || 120,
+        songDurationSec: deckA.duration || 120,
+        instrumental: true,
+      },
+    });
+
+    if (!intent.ok && intent.needsUpgrade) {
+      set({
+        needsUpgrade: true,
+        status: "idle",
+        statusText: "AI remix needs a plan — pick one below, or continue free.",
+        error: intent.error,
+      });
+      // Still arm a local beat so Continue free works.
+    } else if (intent.ok) {
+      usedIntentAi = intent.usedAi;
+      jobSummary = intent.job.summary;
+      set({
+        statusText: intent.usedAi
+          ? `ACE-Step brief ready — ${intent.job.summary}`
+          : `Local brief — ${intent.job.summary}`,
+        usedAi: intent.usedAi ? true : get().usedAi,
+      });
+
+      if (intent.aceStepReady) {
+        set({ statusText: "ACE-Step generating the remix bed…" });
+        const gen = await runAceStepJob({ data: intent.job });
+        if (gen.ok) {
+          const ctx = (
+            djEngine as unknown as { ctx: AudioContext | null }
+          ).ctx;
+          // Use engine decode via temporary path: ensure + Offline-safe decode helper
+          await djEngine.ensure();
+          const liveCtx = (
+            globalThis as unknown as { AudioContext?: typeof AudioContext }
+          ).AudioContext
+            ? // pull the live context through a tiny decode using the engine's sample rate
+              null
+            : null;
+          void liveCtx;
+          const audioCtx = new AudioContext({
+            sampleRate: djEngine.sampleRate(),
+          });
+          try {
+            const buffer = await decodeAceStepAudio(audioCtx, gen.result);
+            const bpm = Math.round(gen.result.bpm || intent.job.bpm || deckA.bpm);
+            const name = `ACE · ${intent.job.summary}`.slice(0, 48);
+            djEngine.loadAiBeat("b", buffer, name, bpm, syntheticPeaks(buffer));
+            set({
+              aiBeatActive: true,
+              usedAi: true,
+              statusText: `${name} armed`,
+              cue: intent.job.summary,
+              ...snapshot(),
+            });
+            await audioCtx.close().catch(() => undefined);
+            return true;
+          } catch {
+            await audioCtx.close().catch(() => undefined);
+            // fall through to synth bed
+            set({
+              statusText: "ACE-Step audio decode failed — using local genre bed.",
+            });
+          }
+        } else {
+          set({
+            statusText: `${gen.error} — using local genre bed.`,
+          });
+        }
+      }
+    } else {
+      jobSummary = intent.job.summary;
+    }
+  } catch {
+    set({ statusText: "Intent planner unavailable — using local genre bed." });
+  }
+
+  // Synth genre bed fallback (always works offline).
   const songBpm = Math.round(deckA.bpm || 120);
   const bpm = remixBpmForStyle(songBpm, grooveStyle);
   const proxy = {
@@ -150,7 +252,8 @@ async function ensureRemixBeat(
   djEngine.loadAiBeat("b", buffer, name, bpm, syntheticPeaks(buffer));
   set({
     aiBeatActive: true,
-    statusText: `${name} armed`,
+    usedAi: usedIntentAi ? true : get().usedAi,
+    statusText: `${name} armed · ${jobSummary}`,
     ...snapshot(),
   });
   return true;

@@ -144,7 +144,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
         {mode === "mashup"
           ? "Beats on the left, lyrics/vocals on the right — both tracks you own. "
-          : "Load your song on the left. The AI DJ builds the beat on the right — or upload your own groove. "}
+          : "Describe the remix in plain English. AI turns that into an ACE-Step production prompt, then builds the genre beat."}
         On iPhone: pick an M4A or MP3 from Files, Downloads, or Voice Memos. Apple
         Music catalog tracks can’t be uploaded.
       </p>

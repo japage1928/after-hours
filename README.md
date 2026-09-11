@@ -21,7 +21,13 @@ export XAI_API_KEY=your_key
 npm run dev
 ```
 
-Open the app, hit **Mash**. Set `XAI_API_KEY` for AI mix plans and vocal writing; mash still works without it using a local blend plan.
+Open the app, hit **Mash** or **Remix**.
+
+- **Mashup** — beats × lyrics (two uploads you own)
+- **Remix** — load one song, describe the remix in plain English. The LLM turns that into an **ACE-Step** production prompt; ACE-Step generates the genre bed when `ACE_STEP_BASE_URL` is set (otherwise a local genre beat is used).
+
+Set `XAI_API_KEY` for intent → ACE-Step prompt translation and mash plans.
+Set `ACE_STEP_BASE_URL` (+ optional `ACE_STEP_API_KEY`) for real AI music generation.
 
 Without `DATABASE_URL`, auth/session tables run on embedded PGLite. With Supabase connected, Better Auth persists to your project Postgres.
 
@@ -44,7 +50,9 @@ Primary path. Supabase project **`after-hours`** (`qrhnoypojhkjkmzlhjfl`, `us-ea
 2. Preferred: Vercel project → **Integrations → Supabase** → link **after-hours**. That syncs `POSTGRES_URL` (and related vars). The app already accepts those names.
 3. Or set env vars manually:
    - `DATABASE_URL` — Supabase **Transaction pooler** URI ([Connect](https://supabase.com/dashboard/project/qrhnoypojhkjkmzlhjfl?showConnect=true)) with your DB password
-   - `XAI_API_KEY` — optional, for mash plans / Write vocals
+   - `XAI_API_KEY` — optional; remix intent → ACE-Step prompt, mash plans, Write vocals
+   - `ACE_STEP_BASE_URL` — optional; real ACE-Step music generation for remix beds
+   - `ACE_STEP_API_KEY` / `ACE_STEP_MODEL` — optional ACE-Step auth / model override
    - `VITE_AUTH_ENABLED=true` — so deployed sign-in is on
 4. Redeploy. Build runs `db:migrate` against Supabase.
 

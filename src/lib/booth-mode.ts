@@ -99,11 +99,11 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
     actionIdle: "Load a song",
     actionBusy: "AI DJ remixing…",
     actionReady: (a, b) => `AI DJ remix ${a} → ${b}`,
-    briefLabel: "Tell the AI DJ",
+    briefLabel: "Remix brief (plain English)",
     briefPlaceholder:
-      "EDM festival drop, dubstep half-time, rock backbeat, country train beat…",
+      "e.g. late-night dubstep drop, keep my vocal vibes, huge bass — or dusty country train-beat under the chorus…",
     defaultPrompt:
-      "Remix this song in the selected genre lane — ride the original, tease the new groove, then drop clean.",
+      "Remix this song in the selected genre — keep the vibe, rebuild the drums and bass for that lane.",
     presets: [
       {
         id: "edm",
