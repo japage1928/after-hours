@@ -17,7 +17,20 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
-import { resolveDatabaseUrl } from "../src/lib/database-url.ts";
+
+/** Same resolution order as src/lib/database-url.ts (keep in sync). */
+function resolveDatabaseUrl(env = process.env) {
+  for (const key of [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL_NON_POOLING",
+  ]) {
+    const value = env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
 
 const databaseUrl = resolveDatabaseUrl(process.env);
 if (!databaseUrl) {
