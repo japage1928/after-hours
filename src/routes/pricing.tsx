@@ -96,13 +96,13 @@ function PricingPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Pricing</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            One song is $2.99. Monthly plans keep AI usage at or under 30% of
-            what you pay — Basic $3, Plus $6, Pro $9.
+            The studio is free to open. Pay only when you use AI — a single song
+            is $2.99, or pick a monthly plan with included writing.
           </p>
         </div>
         <div className="flex gap-2">
           <Button asChild variant="secondary">
-            <Link to="/">Studio</Link>
+            <Link to={user ? "/" : "/login"}>{user ? "Studio" : "Sign in"}</Link>
           </Button>
           {user && !user.isDevFallback ? (
             <Button
@@ -118,20 +118,19 @@ function PricingPage() {
 
       {!stripeReady ? (
         <p className="rounded-2xl bg-surface p-4 text-sm text-muted shadow-border">
-          Stripe keys are not on this deploy yet. Checkout will unlock once{" "}
-          <code className="text-fg">STRIPE_SECRET_KEY</code> and price IDs are
-          set.
+          Checkout is warming up — Stripe is not fully configured on this
+          deploy yet.
         </p>
       ) : null}
 
       {entitlement ? (
         <p className="text-sm text-muted">
           Your booth:{" "}
-          {entitlement.ok
-            ? entitlement.songCredits > 0
-              ? `${entitlement.songCredits} song credit(s)`
-              : `${(entitlement.usageUsedCents / 100).toFixed(2)} / ${(entitlement.usageBudgetCents / 100).toFixed(2)} usage this period`
-            : "no active plan — pick one below"}
+          {entitlement.songCredits > 0
+            ? `${entitlement.songCredits} song credit(s)`
+            : entitlement.usageBudgetCents > 0
+              ? `${(entitlement.usageUsedCents / 100).toFixed(2)} / ${(entitlement.usageBudgetCents / 100).toFixed(2)} included AI this period`
+              : "no plan yet — mash for free, upgrade when you write with AI"}
         </p>
       ) : null}
 
@@ -155,7 +154,7 @@ function PricingPage() {
             </p>
             {plan.usageBudgetLabel ? (
               <p className="text-xs text-subtle">
-                AI usage cap {plan.usageBudgetLabel}/mo (30%)
+                Includes {plan.usageBudgetLabel} AI writing / month
               </p>
             ) : (
               <p className="text-xs text-subtle">Includes 1 song credit</p>
@@ -168,7 +167,7 @@ function PricingPage() {
               {busy === plan.id
                 ? "Redirecting…"
                 : plan.kind === "subscription"
-                  ? "Subscribe"
+                  ? "Start plan"
                   : "Buy song"}
             </Button>
           </section>

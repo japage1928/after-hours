@@ -337,7 +337,7 @@ function AdminPage() {
         <section className="rounded-2xl bg-surface p-5 shadow-border">
           <h2 className="font-display text-2xl text-fg">Subscriptions</h2>
           <p className="mt-1 text-sm text-muted">
-            Sync from Stripe or cancel. Usage budgets stay at 30% of plan price.
+            Sync from Stripe or cancel. Included AI usage follows each plan.
           </p>
           {!subs ? (
             <p className="mt-4 text-sm text-muted">Loading…</p>

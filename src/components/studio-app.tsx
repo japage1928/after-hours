@@ -7,6 +7,7 @@ import { MashPanel } from "@/components/mash-panel";
 import { PlayerStage } from "@/components/player-stage";
 import { TransportBar } from "@/components/transport-bar";
 import { WritePanel } from "@/components/write-panel";
+import { UsageMeter } from "@/components/usage-meter";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
@@ -96,16 +97,11 @@ export function StudioApp() {
                 <Link to="/admin">Admin</Link>
               </Button>
             ) : null}
+            <UsageMeter />
             <Button asChild variant="secondary" className="h-11">
-              <Link to="/pricing">Pricing</Link>
+              <Link to="/pricing">Plans</Link>
             </Button>
-            {user ? (
-              <UserButton />
-            ) : (
-              <Button asChild variant="secondary" className="h-11">
-                <Link to="/login">Sign in</Link>
-              </Button>
-            )}
+            <UserButton />
           </div>
         </div>
       </header>

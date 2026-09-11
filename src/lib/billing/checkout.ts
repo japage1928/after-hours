@@ -67,7 +67,7 @@ export async function createCheckoutSession(opts: {
     customer: customerId,
     client_reference_id: opts.user.id,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/pricing?checkout=cancel`,
     metadata: {
       user_id: opts.user.id,

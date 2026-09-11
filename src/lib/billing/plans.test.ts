@@ -8,7 +8,7 @@ import {
 } from "./plans.ts";
 
 describe("pricing catalog", () => {
-  it("locks retail prices and 30% usage caps", () => {
+  it("locks retail prices and included usage budgets", () => {
     assert.equal(PLANS.song.priceCents, 299);
     assert.equal(PLANS.basic.priceCents, 999);
     assert.equal(PLANS.plus.priceCents, 1999);

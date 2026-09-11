@@ -37,7 +37,7 @@ export async function assertAiAllowed(
   if (entitlement.ok) return null;
   return (
     entitlement.reason ??
-    "Subscribe or buy a single song on /pricing to use AI features."
+    "Buy a song credit or start a plan on /pricing to use AI writing features."
   );
 }
 
