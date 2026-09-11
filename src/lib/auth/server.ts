@@ -78,24 +78,31 @@ const env = (key: string): string | undefined => {
 // provisions auth; set it to "false" to force auth off everywhere (dev user).
 const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 
-// Broker federation creds: the deployer injects a per-app client when deployed;
-// otherwise fall back to the shared live-preview client, which the broker accepts
-// for any `*.grok-sandbox.com` callback (see `./preview`).
+// Broker federation creds: the deployer injects a per-app client when deployed.
+// The shared `grok_preview` client ONLY accepts `*.grok-sandbox.com` callbacks —
+// never use it when `BETTER_AUTH_URL` points at a real deploy (Vercel, custom
+// domain), or Google/Facebook/X buttons silently fail after the broker redirect.
 const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
-const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
-const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
-
-/** True when federated sign-in is active (real auth is enforced). */
-export const authConfigured =
-  !authDisabled && Boolean(grokClientId && grokClientSecret);
-
-// This app's own Better Auth origin. When deployed the deployer injects the
-// public URL. In the sandbox live preview there's no fixed URL (each preview gets
-// a dynamic `*.grok-sandbox.com` host), so we hand Better Auth a dynamic baseURL:
-// it derives the origin per-request from the (proxied) host, validated against the
-// preview allowlist, which makes the OAuth `redirect_uri` the concrete preview URL
-// the broker's preview client accepts.
+const explicitBrokerId = env("GROK_AUTH_CLIENT_ID");
+const explicitBrokerSecret = env("GROK_AUTH_CLIENT_SECRET");
 const explicitBaseURL = env("BETTER_AUTH_URL");
+/** Preview/sandbox (no fixed public URL) may use the shared broker preview client. */
+const allowPreviewBroker = !explicitBaseURL;
+const grokClientId =
+  explicitBrokerId ?? (allowPreviewBroker ? PREVIEW_CLIENT_ID : undefined);
+const grokClientSecret =
+  explicitBrokerSecret ??
+  (allowPreviewBroker ? PREVIEW_CLIENT_SECRET : undefined);
+const brokerSocialEnabled = Boolean(grokClientId && grokClientSecret);
+
+/**
+ * True when real auth is on (not the disabled-auth / shared-dev-user mode).
+ * Email/password and native social work without the Grok broker.
+ */
+export const authConfigured = !authDisabled;
+
+/** Whether broker-mediated Google/Facebook/X buttons are safe to offer. */
+export const brokerOAuthEnabled = authConfigured && brokerSocialEnabled;
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
@@ -125,9 +132,20 @@ const trustedOrigins: string[] = explicitBaseURL
       // Host wildcards (matched against Origin's host)
       ...previewAllowedHosts,
       // Full-origin wildcards (matched against Origin)
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+      ...previewAllowedHosts.flatMap((host) => [
+        `https://${host}`,
+        `http://${host}`,
+      ]),
       ...LOCAL_DEV_ORIGINS,
     ];
+// Vercel preview / alias hosts (Origin must match for credentialed auth POSTs).
+const vercelUrl = env("VERCEL_URL");
+if (vercelUrl) {
+  const origin = vercelUrl.startsWith("http")
+    ? vercelUrl.replace(/\/+$/, "")
+    : `https://${vercelUrl}`;
+  if (!trustedOrigins.includes(origin)) trustedOrigins.push(origin);
+}
 
 const databaseUrl = resolveDatabaseUrl(process.env);
 
@@ -154,7 +172,7 @@ export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 
 // Built separately so the `betterAuth({...})` call stays easy to edit without
 // breaking brackets (models often trip on the conditional plugin spread).
-const grokOAuthPlugin = authConfigured
+const grokOAuthPlugin = brokerOAuthEnabled
   ? genericOAuth({
       config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
         providerId,

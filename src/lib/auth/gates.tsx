@@ -2,9 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { Link, Navigate } from "@tanstack/react-router";
 import {
-  GROK_PROVIDERS,
   authEnabled,
-  nativeSocialProvidersFromVite,
   signIn,
   signInSocial,
   signOut,
@@ -73,29 +71,54 @@ export function SignInGate({
 }
 
 export function SignInButtons() {
-  const native = nativeSocialProvidersFromVite();
+  const [options, setOptions] = useState<{
+    broker: Array<{ providerId: string; label: string }>;
+    native: Array<{ id: "google" | "facebook" | "twitter"; label: string }>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void import("./sign-in-options")
+      .then((m) => m.getSignInOptions())
+      .then((opts) =>
+        setOptions({ broker: opts.broker, native: opts.native }),
+      )
+      .catch(() => setOptions({ broker: [], native: [] }));
+  }, []);
+
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
-      {GROK_PROVIDERS.map((p) => (
-        <button
-          key={p.providerId}
-          type="button"
-          onClick={() => void signIn(p.providerId, { callbackURL: "/" })}
-          className="w-full cursor-pointer rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg shadow-border hover:bg-surface-2"
-        >
-          Continue with {p.label}
-        </button>
-      ))}
-      {native.map((p) => (
+      {(options?.native ?? []).map((p) => (
         <button
           key={`native-${p.id}`}
           type="button"
-          onClick={() => void signInSocial(p.id, { callbackURL: "/" })}
+          onClick={() => {
+            setError(null);
+            void signInSocial(p.id, { callbackURL: "/" }).catch((err) =>
+              setError(err instanceof Error ? err.message : "Sign-in failed"),
+            );
+          }}
           className="w-full cursor-pointer rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg shadow-border hover:bg-surface-2"
         >
           Continue with {p.label}
         </button>
       ))}
+      {(options?.broker ?? []).map((p) => (
+        <button
+          key={p.providerId}
+          type="button"
+          onClick={() => {
+            setError(null);
+            void signIn(p.providerId, { callbackURL: "/" }).catch((err) =>
+              setError(err instanceof Error ? err.message : "Sign-in failed"),
+            );
+          }}
+          className="w-full cursor-pointer rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg shadow-border hover:bg-surface-2"
+        >
+          Continue with {p.label}
+        </button>
+      ))}
+      {error ? <p className="text-sm text-rec">{error}</p> : null}
     </div>
   );
 }

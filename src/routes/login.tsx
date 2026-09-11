@@ -1,18 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import {
-  GROK_PROVIDERS,
   authClient,
   authEnabled,
-  nativeSocialProvidersFromVite,
   signIn,
   signInSocial,
 } from "@/lib/auth/client";
+import {
+  getSignInOptions,
+  type SignInOptions,
+} from "@/lib/auth/sign-in-options";
 import { safeNextPath } from "@/lib/booth-mode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import type { NativeSocialId } from "@/lib/auth/providers";
 
 const loginSearchSchema = z.object({
   next: z.string().optional(),
@@ -33,6 +36,22 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [socialBusy, setSocialBusy] = useState<string | null>(null);
+  const [options, setOptions] = useState<SignInOptions | null>(null);
+
+  useEffect(() => {
+    if (!authEnabled) return;
+    void getSignInOptions()
+      .then(setOptions)
+      .catch(() =>
+        setOptions({
+          emailPassword: true,
+          broker: [],
+          native: [],
+          callbackHints: { google: "", facebook: "", twitter: "" },
+        }),
+      );
+  }, []);
 
   if (!isPending && user) {
     const home = isAdminEmail(user.primaryEmail) ? "/admin" : dest;
@@ -72,6 +91,36 @@ function LoginPage() {
     }
   }
 
+  async function onBroker(providerId: string, label: string) {
+    setError(null);
+    setSocialBusy(providerId);
+    try {
+      await signIn(providerId, { callbackURL: dest });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Could not continue with ${label}`,
+      );
+      setSocialBusy(null);
+    }
+  }
+
+  async function onNative(id: NativeSocialId, label: string) {
+    setError(null);
+    setSocialBusy(id);
+    try {
+      await signInSocial(id, { callbackURL: dest });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Could not continue with ${label}`,
+      );
+      setSocialBusy(null);
+    }
+  }
+
   if (isPending) {
     return (
       <div className="grid min-h-dvh place-items-center bg-bg text-muted">
@@ -79,6 +128,9 @@ function LoginPage() {
       </div>
     );
   }
+
+  const hasSocial =
+    (options?.broker.length ?? 0) > 0 || (options?.native.length ?? 0) > 0;
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-bg text-fg">
@@ -106,7 +158,7 @@ function LoginPage() {
         <div className="order-1 md:order-2">
           <form
             onSubmit={onSubmit}
-            className="flex flex-col gap-3 rounded-2xl bg-surface/90 p-5 shadow-border backdrop-blur-sm md:p-6"
+            className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border md:p-6"
           >
             <div>
               <h2 className="font-display text-3xl text-fg">
@@ -175,32 +227,51 @@ function LoginPage() {
 
             {authEnabled ? (
               <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
-                {GROK_PROVIDERS.map((p) => (
-                  <Button
-                    key={p.providerId}
-                    type="button"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() =>
-                      void signIn(p.providerId, { callbackURL: dest })
-                    }
-                  >
-                    Continue with {p.label}
-                  </Button>
-                ))}
-                {nativeSocialProvidersFromVite().map((p) => (
+                {options?.native.map((p) => (
                   <Button
                     key={`native-${p.id}`}
                     type="button"
                     variant="secondary"
                     className="w-full"
-                    onClick={() =>
-                      void signInSocial(p.id, { callbackURL: dest })
-                    }
+                    disabled={Boolean(socialBusy)}
+                    onClick={() => void onNative(p.id, p.label)}
                   >
-                    Continue with {p.label}
+                    {socialBusy === p.id
+                      ? "Redirecting…"
+                      : `Continue with ${p.label}`}
                   </Button>
                 ))}
+                {options?.broker.map((p) => (
+                  <Button
+                    key={p.providerId}
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    disabled={Boolean(socialBusy)}
+                    onClick={() => void onBroker(p.providerId, p.label)}
+                  >
+                    {socialBusy === p.providerId
+                      ? "Redirecting…"
+                      : `Continue with ${p.label}`}
+                  </Button>
+                ))}
+                {options && !hasSocial ? (
+                  <p className="text-xs text-muted">
+                    Google / Facebook / X need OAuth app credentials on this
+                    deploy. Email sign-in works now. Add{" "}
+                    <span className="font-mono text-fg">GOOGLE_CLIENT_ID</span>{" "}
+                    +{" "}
+                    <span className="font-mono text-fg">
+                      GOOGLE_CLIENT_SECRET
+                    </span>{" "}
+                    (and optional Facebook / X keys) in Vercel, with redirect URI{" "}
+                    <span className="break-all font-mono text-fg">
+                      {options.callbackHints.google ||
+                        "https://after-hours-plum.vercel.app/api/auth/callback/google"}
+                    </span>
+                    .
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </form>

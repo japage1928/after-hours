@@ -142,6 +142,28 @@ function authPopupPlugin(): Plugin {
   };
 }
 
+function nativeSocialFromProcessEnv(): string {
+  const fromVite = process.env.VITE_NATIVE_SOCIAL?.trim();
+  if (fromVite) return fromVite;
+  const ids: string[] = [];
+  if (process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()) {
+    ids.push("google");
+  }
+  if (
+    process.env.FACEBOOK_CLIENT_ID?.trim() &&
+    process.env.FACEBOOK_CLIENT_SECRET?.trim()
+  ) {
+    ids.push("facebook");
+  }
+  if (
+    process.env.TWITTER_CLIENT_ID?.trim() &&
+    process.env.TWITTER_CLIENT_SECRET?.trim()
+  ) {
+    ids.push("twitter");
+  }
+  return ids.join(",");
+}
+
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
@@ -157,6 +179,13 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // Bake native social flags from GOOGLE_*/FACEBOOK_*/TWITTER_* at build time
+  // so Vercel doesn't need a separate VITE_NATIVE_SOCIAL when secrets are set.
+  define: {
+    "import.meta.env.VITE_NATIVE_SOCIAL": JSON.stringify(
+      nativeSocialFromProcessEnv(),
+    ),
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
