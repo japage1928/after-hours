@@ -53,6 +53,7 @@ export const MESSAGE_MIN = 10;
 export const MESSAGE_MAX = 2000;
 export const ADMIN_NOTE_MAX = 1000;
 export const MAX_OPEN_TICKETS_PER_USER = 8;
+export const ADMIN_TICKET_PAGE_SIZE = 50;
 
 export const CreateSupportTicketSchema = z.object({
   category: z.enum(SUPPORT_CATEGORY_IDS),
@@ -78,6 +79,11 @@ export const AdminUpdateTicketSchema = z
     (value) => value.status !== undefined || value.adminNote !== undefined,
     { message: "Provide a status or an admin note." },
   );
+
+export const ListAdminTicketsQuerySchema = z.object({
+  status: z.enum(["open", "resolved", "all"]).default("open"),
+  offset: z.coerce.number().int().min(0).max(50_000).default(0),
+});
 
 export function isSupportCategory(value: string): value is SupportCategory {
   return (SUPPORT_CATEGORY_IDS as readonly string[]).includes(value);
@@ -116,4 +122,8 @@ export function parseCreateSupportTicket(input: unknown) {
 
 export function parseAdminUpdateTicket(input: unknown) {
   return AdminUpdateTicketSchema.parse(input);
+}
+
+export function parseListAdminTicketsQuery(input: unknown) {
+  return ListAdminTicketsQuerySchema.parse(input ?? {});
 }

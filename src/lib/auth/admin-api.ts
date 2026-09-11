@@ -14,8 +14,10 @@ import {
 } from "@/lib/billing/usage";
 import { getSql } from "@/lib/db";
 import {
+  ADMIN_TICKET_PAGE_SIZE,
   nextSupportStatus,
   parseAdminUpdateTicket,
+  parseListAdminTicketsQuery,
   type SupportCategory,
   type SupportStatus,
 } from "@/lib/support";
@@ -483,10 +485,16 @@ function isoTimestamp(value: Date | string | null | undefined): string {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
-export const listAdminTickets = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AdminTicketRow[]> => {
+export const listAdminTickets = createServerFn({ method: "GET" })
+  .validator((input: unknown) => parseListAdminTicketsQuery(input))
+  .handler(async ({ data }): Promise<{
+    tickets: AdminTicketRow[];
+    hasMore: boolean;
+    offset: number;
+  }> => {
     await requireAdminSession();
     const sql = await getSql();
+    const pageSize = ADMIN_TICKET_PAGE_SIZE;
     const rows = await sql<{
       id: string;
       user_id: string;
@@ -505,25 +513,29 @@ export const listAdminTickets = createServerFn({ method: "GET" }).handler(
              u.email as user_email, u.name as user_name
       from support_ticket t
       left join "user" u on u.id = t.user_id
-      order by
-        case when t.status = 'open' then 0 else 1 end,
-        t.created_at desc
-      limit 200
+      where (${data.status}::text = 'all' or t.status = ${data.status})
+      order by t.created_at desc
+      limit ${pageSize + 1} offset ${data.offset}
     `;
-    return rows.map((r) => ({
-      id: r.id,
-      userId: r.user_id,
-      email: r.email ?? r.user_email,
-      userName: r.user_name,
-      category: r.category as SupportCategory,
-      message: r.message,
-      status: r.status as SupportStatus,
-      adminNote: r.admin_note,
-      createdAt: isoTimestamp(r.created_at),
-      updatedAt: isoTimestamp(r.updated_at),
-    }));
-  },
-);
+    const hasMore = rows.length > pageSize;
+    const page = hasMore ? rows.slice(0, pageSize) : rows;
+    return {
+      offset: data.offset,
+      hasMore,
+      tickets: page.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        email: r.email ?? r.user_email,
+        userName: r.user_name,
+        category: r.category as SupportCategory,
+        message: r.message,
+        status: r.status as SupportStatus,
+        adminNote: r.admin_note,
+        createdAt: isoTimestamp(r.created_at),
+        updatedAt: isoTimestamp(r.updated_at),
+      })),
+    };
+  });
 
 export const adminUpdateTicket = createServerFn({ method: "POST" })
   .validator((input: unknown) => parseAdminUpdateTicket(input))

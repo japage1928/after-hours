@@ -24,7 +24,7 @@ import {
 } from "@/lib/auth/admin-api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { formatUsd } from "@/lib/billing/plans";
-import { supportCategoryLabel } from "@/lib/support";
+import { ADMIN_TICKET_PAGE_SIZE, supportCategoryLabel } from "@/lib/support";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -47,6 +47,8 @@ function AdminPage() {
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "resolved">(
     "open",
   );
+  const [ticketOffset, setTicketOffset] = useState(0);
+  const [ticketHasMore, setTicketHasMore] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<AdminTicketRow | null>(
     null,
   );
@@ -66,12 +68,14 @@ function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
 
   const reload = useCallback(async () => {
-    const [boot, rows, subRows, stuck, ticketRows, auditRows] = await Promise.all([
+    const [boot, rows, subRows, stuck, ticketPage, auditRows] = await Promise.all([
       getAdminBootstrap(),
       listAdminUsers(),
       listSubscriptions(),
       listStuckPayments(),
-      listAdminTickets(),
+      listAdminTickets({
+        data: { status: ticketFilter, offset: ticketOffset },
+      }),
       listAdminAudit(),
     ]);
     setAdmins(boot.admins);
@@ -80,12 +84,13 @@ function AdminPage() {
     setUsers(rows);
     setSubs(subRows);
     setPayments(stuck);
-    setTickets(ticketRows);
+    setTickets(ticketPage.tickets);
+    setTicketHasMore(ticketPage.hasMore);
     setAudit(auditRows);
     setSelectedTicket((cur) =>
-      cur ? (ticketRows.find((t) => t.id === cur.id) ?? null) : null,
+      cur ? (ticketPage.tickets.find((t) => t.id === cur.id) ?? null) : null,
     );
-  }, []);
+  }, [ticketFilter, ticketOffset]);
 
   useEffect(() => {
     if (isPending || !user || !isAdminEmail(user.primaryEmail)) return;
@@ -630,7 +635,10 @@ function AdminPage() {
                   key={id}
                   size="sm"
                   variant={ticketFilter === id ? "default" : "secondary"}
-                  onClick={() => setTicketFilter(id)}
+                  onClick={() => {
+                    setTicketOffset(0);
+                    setTicketFilter(id);
+                  }}
                 >
                   {label}
                 </Button>
@@ -639,9 +647,7 @@ function AdminPage() {
           </div>
           {!tickets ? (
             <p className="mt-4 text-sm text-muted">Loading tickets…</p>
-          ) : tickets.filter((t) =>
-              ticketFilter === "all" ? true : t.status === ticketFilter,
-            ).length === 0 ? (
+          ) : tickets.length === 0 ? (
             <p className="mt-4 text-sm text-muted">
               {ticketFilter === "open"
                 ? "No open tickets."
@@ -650,9 +656,6 @@ function AdminPage() {
           ) : (
             <ul className="mt-4 divide-y divide-line">
               {tickets
-                .filter((t) =>
-                  ticketFilter === "all" ? true : t.status === ticketFilter,
-                )
                 .map((t) => (
                   <li key={t.id} className="flex flex-col gap-3 py-4">
                     <button
@@ -764,6 +767,32 @@ function AdminPage() {
                 ))}
             </ul>
           )}
+          {ticketOffset > 0 || ticketHasMore ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || ticketOffset === 0}
+                onClick={() =>
+                  setTicketOffset((n) =>
+                    Math.max(0, n - ADMIN_TICKET_PAGE_SIZE),
+                  )
+                }
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || !ticketHasMore}
+                onClick={() =>
+                  setTicketOffset((n) => n + ADMIN_TICKET_PAGE_SIZE)
+                }
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

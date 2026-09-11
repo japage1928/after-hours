@@ -38,31 +38,37 @@ export const createSupportTicket = createServerFn({ method: "POST" })
       );
     }
 
-    const open = await sql<{ n: number }>`
-      select count(*)::int as n
-      from support_ticket
-      where user_id = ${context.userId} and status = 'open'
-    `;
-    if (Number(open[0]?.n ?? 0) >= MAX_OPEN_TICKETS_PER_USER) {
-      throw new Error(
-        `You already have ${MAX_OPEN_TICKETS_PER_USER} open tickets. Wait for a reply or check existing ones below.`,
-      );
-    }
-
     const id = newId("tkt");
-    await sql`
+    // One statement: take a per-user xact lock, then insert only if this
+    // user still has fewer than MAX_OPEN_TICKETS_PER_USER open rows.
+    const inserted = await sql<{ id: string }>`
+      with lock as (
+        select pg_advisory_xact_lock(hashtext(${context.userId})::bigint)
+      )
       insert into support_ticket (
         id, user_id, email, category, message, status
-      ) values (
+      )
+      select
         ${id},
         ${context.userId},
         ${email},
         ${data.category},
         ${data.message},
         ${"open"}
-      )
+      from lock
+      where (
+        select count(*)::int
+        from support_ticket
+        where user_id = ${context.userId} and status = 'open'
+      ) < ${MAX_OPEN_TICKETS_PER_USER}
+      returning id
     `;
-    return { ok: true as const, id };
+    if (!inserted[0]) {
+      throw new Error(
+        `You already have ${MAX_OPEN_TICKETS_PER_USER} open tickets. Wait for a reply or check existing ones below.`,
+      );
+    }
+    return { ok: true as const, id: inserted[0].id };
   });
 
 export const listMySupportTickets = createServerFn({ method: "GET" })

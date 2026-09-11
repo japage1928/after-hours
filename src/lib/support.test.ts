@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ADMIN_NOTE_MAX,
+  ADMIN_TICKET_PAGE_SIZE,
   CreateSupportTicketSchema,
   MESSAGE_MAX,
   MESSAGE_MIN,
@@ -10,6 +11,7 @@ import {
   nextSupportStatus,
   parseAdminUpdateTicket,
   parseCreateSupportTicket,
+  parseListAdminTicketsQuery,
   supportCategoryLabel,
 } from "./support.ts";
 import { safeNextPath } from "./booth-mode.ts";
@@ -117,6 +119,29 @@ describe("admin ticket patch", () => {
         ticketId: "tkt_1",
         adminNote: "x".repeat(ADMIN_NOTE_MAX + 1),
       }),
+    );
+  });
+});
+
+describe("admin ticket list query", () => {
+  it("defaults to open tickets at offset 0", () => {
+    const parsed = parseListAdminTicketsQuery({});
+    assert.equal(parsed.status, "open");
+    assert.equal(parsed.offset, 0);
+    assert.equal(ADMIN_TICKET_PAGE_SIZE, 50);
+  });
+
+  it("accepts resolved/all and a page offset", () => {
+    assert.equal(
+      parseListAdminTicketsQuery({ status: "resolved", offset: 50 }).status,
+      "resolved",
+    );
+    assert.equal(parseListAdminTicketsQuery({ status: "all" }).status, "all");
+    assert.throws(() =>
+      parseListAdminTicketsQuery({ status: "closed" }),
+    );
+    assert.throws(() =>
+      parseListAdminTicketsQuery({ offset: -1 }),
     );
   });
 });
