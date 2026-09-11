@@ -38,9 +38,10 @@ export async function getActiveSubscription(userId: string) {
     usage_budget_cents: number;
     current_period_start: Date | string | null;
     current_period_end: Date | string | null;
+    cancel_at_period_end: boolean;
   }>`
     select id, plan_id, status, usage_budget_cents,
-           current_period_start, current_period_end
+           current_period_start, current_period_end, cancel_at_period_end
     from billing_subscription
     where user_id = ${userId}
       and status in ('active', 'trialing', 'past_due')

@@ -8,7 +8,11 @@ import {
   type PlanId,
 } from "@/lib/billing/plans";
 import { appOrigin, getStripe } from "@/lib/billing/stripe";
-import { grantSongCredits, newId } from "@/lib/billing/usage";
+import {
+  getActiveSubscription,
+  grantSongCredits,
+  newId,
+} from "@/lib/billing/usage";
 
 export async function requireSessionUser() {
   const request = getRequest();
@@ -126,9 +130,41 @@ export async function createBillingPortalSession(user: {
   const stripe = getStripe();
   const portal = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${appOrigin()}/pricing`,
+    return_url: `${appOrigin()}/settings?tab=billing`,
   });
   return { url: portal.url };
+}
+
+/** Cancel the caller's Stripe subscription (at period end by default). */
+export async function cancelSubscriptionForUser(
+  userId: string,
+  opts: { immediately?: boolean } = {},
+) {
+  const sub = await getActiveSubscription(userId);
+  if (!sub) throw new Error("No active subscription to cancel");
+  const stripe = getStripe();
+  const updated = opts.immediately
+    ? await stripe.subscriptions.cancel(sub.id)
+    : await stripe.subscriptions.update(sub.id, {
+        cancel_at_period_end: true,
+      });
+  await upsertSubscriptionFromStripe(updated as never);
+  return { subscriptionId: sub.id, immediately: Boolean(opts.immediately) };
+}
+
+/** Undo a pending cancel-at-period-end. */
+export async function resumeSubscriptionForUser(userId: string) {
+  const sub = await getActiveSubscription(userId);
+  if (!sub) throw new Error("No active subscription to resume");
+  if (!sub.cancel_at_period_end) {
+    throw new Error("Subscription is not scheduled to cancel");
+  }
+  const stripe = getStripe();
+  const updated = await stripe.subscriptions.update(sub.id, {
+    cancel_at_period_end: false,
+  });
+  await upsertSubscriptionFromStripe(updated as never);
+  return { subscriptionId: sub.id };
 }
 
 export async function upsertSubscriptionFromStripe(sub: {

@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,14 @@ function LoginPage() {
 
   if (!isPending && user) {
     const home = isAdminEmail(user.primaryEmail) ? "/admin" : dest;
-    return <Navigate to={home} />;
+    if (typeof window !== "undefined") {
+      window.location.replace(home);
+    }
+    return (
+      <div className="grid min-h-dvh place-items-center bg-bg text-muted">
+        Taking you in…
+      </div>
+    );
   }
 
   async function onSubmit(e: FormEvent) {

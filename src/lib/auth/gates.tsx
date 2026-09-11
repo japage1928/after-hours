@@ -162,7 +162,7 @@ export function UserButton() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl bg-surface py-1 shadow-border"
+          className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl bg-surface py-1 shadow-border"
         >
           <div className="border-b border-line px-3 py-2">
             <p className="truncate text-sm font-medium text-fg">{label}</p>
@@ -170,20 +170,32 @@ export function UserButton() {
               <p className="truncate text-xs text-muted">{user.primaryEmail}</p>
             ) : null}
           </div>
-          <Link
-            to="/settings"
-            role="menuitem"
-            className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
-            onClick={() => setOpen(false)}
-          >
-            Settings
-          </Link>
+          {(
+            [
+              ["settings", "Settings"],
+              ["projects", "Projects"],
+              ["profile", "Profile"],
+              ["account", "Account"],
+              ["billing", "Billing"],
+            ] as const
+          ).map(([tab, title]) => (
+            <Link
+              key={tab}
+              to="/settings"
+              search={{ tab }}
+              role="menuitem"
+              className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
+              onClick={() => setOpen(false)}
+            >
+              {title}
+            </Link>
+          ))}
           {authEnabled && !gateSession ? (
             <button
               type="button"
               role="menuitem"
               disabled={signingOut}
-              className="block w-full px-3 py-2 text-left text-sm text-fg hover:bg-surface-2 disabled:opacity-60"
+              className="mt-1 block w-full border-t border-line px-3 py-2 text-left text-sm text-fg hover:bg-surface-2 disabled:opacity-60"
               onClick={() => {
                 setSigningOut(true);
                 void signOut("/login").catch(() => setSigningOut(false));

@@ -115,8 +115,25 @@ export function isBoothMode(value: string): value is BoothMode {
 export function safeNextPath(raw: string | null | undefined): string {
   if (!raw) return "/";
   try {
-    const path = raw.startsWith("/") ? raw : new URL(raw, "http://local").pathname;
+    const url = raw.startsWith("/")
+      ? new URL(raw, "http://local")
+      : new URL(raw, "http://local");
+    const path = url.pathname;
     if (path === "/mashup" || path === "/remix") return path;
+    if (path === "/settings") {
+      const tab = url.searchParams.get("tab");
+      if (
+        tab === "settings" ||
+        tab === "projects" ||
+        tab === "profile" ||
+        tab === "account" ||
+        tab === "billing"
+      ) {
+        return `/settings?tab=${tab}`;
+      }
+      return "/settings";
+    }
+    if (path === "/pricing" || path === "/admin") return path;
   } catch {
     /* ignore */
   }
