@@ -23,30 +23,33 @@ npm run dev
 
 Open the app, hit **Mash**. Set `XAI_API_KEY` for AI mix plans and vocal writing; mash still works without it using a local blend plan.
 
+Without `DATABASE_URL`, auth/session tables run on embedded PGLite. With Supabase connected, Better Auth persists to your project Postgres.
+
 ## Stack
 
-TanStack Start, Vite, Tailwind v4, Zustand, Web Audio.
+TanStack Start, Vite, Tailwind v4, Zustand, Web Audio, Better Auth → **Supabase Postgres**.
 
-## Deploy (free): Vercel Hobby + Neon Free
+## Deploy: Vercel + Supabase
 
-Free path — no paid Supabase required.
+Primary path. Supabase project **`after-hours`** (`qrhnoypojhkjkmzlhjfl`, `us-east-1`) is live with the Better Auth schema (users, sessions, accounts) already applied and RLS enabled for PostgREST.
 
-| Piece | Plan | Notes |
-| --- | --- | --- |
-| Hosting | [Vercel Hobby](https://vercel.com) (free) | Import this repo |
-| Database | [Neon Free](https://console.neon.tech) project **`after-hours`** (`frosty-dream-64435061`) | Auth schema already applied |
+| Piece | Service |
+| --- | --- |
+| Hosting | [Vercel](https://vercel.com/new) (Hobby is fine) |
+| Database + auth storage | [Supabase](https://supabase.com/dashboard/project/qrhnoypojhkjkmzlhjfl) **after-hours** |
 
 ### Connect them
 
-1. Import the GitHub repo into [Vercel](https://vercel.com/new) (Hobby).
-2. In Neon → project **after-hours** → **Connect**, copy the **pooled** connection string.
-3. In Vercel → Project → **Settings → Environment Variables**, set:
-   - `DATABASE_URL` = that Neon URI
-   - `XAI_API_KEY` = your xAI key (optional; mash works without it)
-4. Redeploy. Build runs `db:migrate` against Neon.
+1. Import this GitHub repo into [Vercel](https://vercel.com/new).
+2. Preferred: Vercel project → **Integrations → Supabase** → link **after-hours**. That syncs `POSTGRES_URL` (and related vars). The app already accepts those names.
+3. Or set env vars manually:
+   - `DATABASE_URL` — Supabase **Transaction pooler** URI ([Connect](https://supabase.com/dashboard/project/qrhnoypojhkjkmzlhjfl?showConnect=true)) with your DB password
+   - `XAI_API_KEY` — optional, for mash plans / Write vocals
+   - `VITE_AUTH_ENABLED=true` — so deployed sign-in is on
+4. Redeploy. Build runs `db:migrate` against Supabase.
 
-Local/preview still works with no `DATABASE_URL` (embedded PGLite).
+Project URL: `https://qrhnoypojhkjkmzlhjfl.supabase.co`
 
-### Stop the paid Supabase project
+### Note on Neon
 
-Your Supabase org is **Pro**, so the earlier **`after-hours`** Supabase project (`qrhnoypojhkjkmzlhjfl`) is billable and can’t be paused from here. Delete it in the [Supabase dashboard](https://supabase.com/dashboard/project/qrhnoypojhkjkmzlhjfl/settings/general) to avoid Pro project charges. The app no longer depends on it.
+A Neon Free project was created earlier while exploring a $0 path. You can delete it in the [Neon console](https://console.neon.tech/app/projects/frosty-dream-64435061) if you are not using it — After Hours is wired for Supabase.
