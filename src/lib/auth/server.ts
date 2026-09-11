@@ -207,6 +207,9 @@ const socialProviders =
               {
                 clientId: env("GOOGLE_CLIENT_ID") as string,
                 clientSecret: env("GOOGLE_CLIENT_SECRET") as string,
+                // New Google users get an After Hours account automatically.
+                disableSignUp: false,
+                disableImplicitSignUp: false,
               },
             ];
           }
@@ -216,6 +219,8 @@ const socialProviders =
               {
                 clientId: env("FACEBOOK_CLIENT_ID") as string,
                 clientSecret: env("FACEBOOK_CLIENT_SECRET") as string,
+                disableSignUp: false,
+                disableImplicitSignUp: false,
               },
             ];
           }
@@ -224,6 +229,8 @@ const socialProviders =
             {
               clientId: env("TWITTER_CLIENT_ID") as string,
               clientSecret: env("TWITTER_CLIENT_SECRET") as string,
+              disableSignUp: false,
+              disableImplicitSignUp: false,
             },
           ];
         }),

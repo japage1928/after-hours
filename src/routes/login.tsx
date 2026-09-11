@@ -19,6 +19,7 @@ import type { NativeSocialId } from "@/lib/auth/providers";
 
 const loginSearchSchema = z.object({
   next: z.string().optional(),
+  error: z.string().optional(),
 });
 
 export const Route = createFileRoute("/login")({
@@ -26,18 +27,38 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+function oauthErrorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  if (code === "google_failed" || code.includes("google")) {
+    return "Google sign-in didn’t finish. Check the OAuth client secret in Vercel, then try again.";
+  }
+  if (code === "facebook_failed" || code.includes("facebook")) {
+    return "Facebook sign-in didn’t finish. Try again or use email.";
+  }
+  if (code === "twitter_failed" || code.includes("twitter")) {
+    return "X sign-in didn’t finish. Try again or use email.";
+  }
+  return "Social sign-in didn’t finish. Try again or use email.";
+}
+
 function LoginPage() {
-  const { next } = Route.useSearch();
+  const { next, error: oauthError } = Route.useSearch();
   const dest = safeNextPath(next);
   const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    oauthErrorMessage(oauthError),
+  );
   const [busy, setBusy] = useState(false);
   const [socialBusy, setSocialBusy] = useState<string | null>(null);
   const [options, setOptions] = useState<SignInOptions | null>(null);
+
+  useEffect(() => {
+    setError(oauthErrorMessage(oauthError));
+  }, [oauthError]);
 
   useEffect(() => {
     if (!authEnabled) return;

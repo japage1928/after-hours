@@ -233,7 +233,9 @@ export async function signInSocial(
   opts: { callbackURL?: string; errorCallbackURL?: string } = {},
 ): Promise<void> {
   const callbackURL = opts.callbackURL ?? "/";
-  const errorCallbackURL = opts.errorCallbackURL ?? "/";
+  const errorCallbackURL =
+    opts.errorCallbackURL ??
+    `/login?error=${encodeURIComponent(`${provider}_failed`)}&next=${encodeURIComponent(callbackURL)}`;
 
   await runPreSignInSignOut({
     livePreview: inLivePreview(),
@@ -246,6 +248,8 @@ export async function signInSocial(
     provider,
     callbackURL,
     errorCallbackURL,
+    // Create an account when this Google/Facebook/X identity is new.
+    requestSignUp: true,
   });
   if (error) throw new Error(error.message ?? "Sign-in failed");
   if (data?.url) window.location.href = data.url;
