@@ -15,6 +15,15 @@ describe("booth modes", () => {
     assert.equal(BOOTH_MODES.generate.path, "/generate");
   });
 
+  it("seeds Generate with an example prompt so the first visit is not blank", () => {
+    assert.match(BOOTH_MODES.generate.defaultPrompt, /Night-drive/i);
+    assert.ok(BOOTH_MODES.generate.presets.length >= 3);
+    assert.equal(
+      BOOTH_MODES.generate.defaultPrompt,
+      BOOTH_MODES.generate.presets[0]?.prompt,
+    );
+  });
+
   it("allows generate as a post-login redirect", () => {
     assert.equal(safeNextPath("/generate"), "/generate");
     assert.equal(safeNextPath("/remix"), "/remix");

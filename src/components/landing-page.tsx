@@ -1,13 +1,21 @@
+import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
 import { BOOTH_MODE_ORDER, BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { PlansGrid } from "@/components/plans-grid";
 import { NeedHelpLink } from "@/components/need-help-link";
+import { isCheckoutSuccessSearch } from "@/lib/checkout-return";
 import { cn } from "@/lib/utils";
 
 export function LandingPage() {
   const user = useCurrentUser();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isCheckoutSuccessSearch(window.location.search)) return;
+    window.location.replace(`/generate${window.location.search}`);
+  }, []);
 
   return (
     <div className="relative bg-bg text-fg">

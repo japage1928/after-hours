@@ -72,7 +72,13 @@ type StudioState = {
   statusText: string;
   error: string | null;
   needsUpgrade: boolean;
-  capabilities: { aceStep: boolean; xai: boolean; engineLabel: string } | null;
+  capabilities: {
+    aceStep: boolean;
+    xai: boolean;
+    owner: boolean;
+    engineLabel: string;
+    setupHint: string | null;
+  } | null;
   grooveStyle: GrooveStyle;
   prompt: string;
   lyrics: string;
@@ -147,6 +153,12 @@ function trackFromBuffer(
     duration: buffer.duration,
     peaks,
   };
+}
+
+function humanizeForState(raw: string): string {
+  return humanizeStudioError(raw, {
+    owner: Boolean(useStudioBooth.getState().capabilities?.owner),
+  });
 }
 
 async function persistBoothResult(
@@ -250,7 +262,9 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
           capabilities: {
             aceStep: caps.aceStep,
             xai: caps.xai,
+            owner: caps.owner,
             engineLabel: caps.engineLabel,
+            setupHint: caps.setupHint,
           },
         });
       } catch {
@@ -258,7 +272,9 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
           capabilities: {
             aceStep: false,
             xai: false,
+            owner: false,
             engineLabel: "Could not read generation status.",
+            setupHint: null,
           },
         });
       }
@@ -379,7 +395,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         set({
           status: "idle",
           needsUpgrade: true,
-          error: humanizeStudioError(intent.error),
+          error: humanizeForState(intent.error),
           statusText: "AI generation needs a plan.",
         });
         return;
@@ -387,7 +403,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (!intent.aceStepReady) {
         set({
           status: "error",
-          error: humanizeStudioError("ACE-Step is not configured on this deploy."),
+          error: humanizeForState("ACE-Step is not configured on this deploy."),
           statusText: "ACE-Step isn’t configured.",
         });
         return;
@@ -409,7 +425,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (!run.ok) {
         set({
           status: "error",
-          error: humanizeStudioError(run.error),
+          error: humanizeForState(run.error),
           statusText: "Generation failed.",
         });
         return;
@@ -422,7 +438,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (!bufferQa.ok) {
         set({
           status: "error",
-          error: humanizeStudioError(
+          error: humanizeForState(
             `QA rejected audio (${bufferQa.reasons[0] ?? "failed"}).`,
           ),
           statusText: "Quality check failed.",
@@ -455,7 +471,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (gen !== jobGen) return;
       set({
         status: "error",
-        error: humanizeStudioError(
+        error: humanizeForState(
           err instanceof Error ? err.message : "Generation failed.",
         ),
         statusText: "Generation failed.",
@@ -561,7 +577,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         set({
           status: "idle",
           needsUpgrade: true,
-          error: humanizeStudioError(intent.error),
+          error: humanizeForState(intent.error),
           statusText: "AI remix needs a plan.",
         });
         return;
@@ -578,7 +594,9 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
           bed,
           bpm,
           "local-mix",
-          `Local ${grooveLabel(grooveStyle)} drum-bed preview — ACE-Step isn’t configured on this deploy.`,
+          get().capabilities?.owner
+            ? `Local ${grooveLabel(grooveStyle)} drum-bed preview — ACE-Step isn’t configured on this deploy.`
+            : `Local ${grooveLabel(grooveStyle)} drum-bed preview — AI studio is temporarily unavailable.`,
         );
         return;
       }
@@ -600,7 +618,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (!run.ok) {
         set({
           status: "error",
-          error: humanizeStudioError(run.error),
+          error: humanizeForState(run.error),
           statusText: "Remix generation failed.",
         });
         return;
@@ -610,7 +628,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (!bufferQa.ok) {
         set({
           status: "error",
-          error: humanizeStudioError(
+          error: humanizeForState(
             `QA rejected audio (${bufferQa.reasons[0] ?? "failed"}).`,
           ),
           statusText: "Quality check failed.",
@@ -626,7 +644,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (gen !== jobGen) return;
       set({
         status: "error",
-        error: humanizeStudioError(
+        error: humanizeForState(
           err instanceof Error ? err.message : "Remix failed.",
         ),
         statusText: "Remix failed.",
@@ -718,7 +736,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       if (gen !== jobGen) return;
       set({
         status: "error",
-        error: humanizeStudioError(
+        error: humanizeForState(
           err instanceof Error ? err.message : "Mashup failed.",
         ),
         statusText: "Mashup failed.",

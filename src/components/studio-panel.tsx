@@ -56,6 +56,8 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
   const navigate = useNavigate();
 
   const busy = status === "loading" || status === "generating";
+  const generateBlocked = mode === "generate" && capabilities && !capabilities.aceStep;
+  const remixAiBlocked = mode === "remix" && capabilities && !capabilities.aceStep;
 
   useEffect(() => {
     void hydrate();
@@ -77,6 +79,13 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
   useEffect(() => {
     if (mode !== "generate") {
       setPrompt(meta.defaultPrompt);
+      return;
+    }
+    const current = useStudioBooth.getState().prompt.trim();
+    const remixDefault = BOOTH_MODES.remix.defaultPrompt;
+    const mashDefault = BOOTH_MODES.mashup.defaultPrompt;
+    if (!current || current === remixDefault || current === mashDefault) {
+      setPrompt(meta.defaultPrompt);
     }
   }, [mode, meta.defaultPrompt, setPrompt]);
 
@@ -92,9 +101,13 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
       ? meta.actionBusy
       : ready
         ? mode === "generate"
-          ? "Generate song"
+          ? generateBlocked
+            ? "AI studio unavailable"
+            : "Generate song"
           : mode === "remix"
-            ? `Remix as ${GROOVE_STYLES.find((g) => g.id === grooveStyle)?.label ?? grooveStyle}`
+            ? remixAiBlocked
+              ? `Local remix as ${GROOVE_STYLES.find((g) => g.id === grooveStyle)?.label ?? grooveStyle}`
+              : `Remix as ${GROOVE_STYLES.find((g) => g.id === grooveStyle)?.label ?? grooveStyle}`
             : sourceA && sourceB
               ? `Mash ${sourceA.name} × ${sourceB.name}`
               : "Mash lyrics with a local preview beat"
@@ -102,7 +115,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
 
   function runPrimary() {
     if (mode === "generate") void generate();
-    else if (mode === "remix") void remix();
+    else if (mode === "remix") void remix({ localPreview: Boolean(remixAiBlocked) });
     else if (sourceA && sourceB) void mashup();
     else void mashup({ localBeat: true });
   }
@@ -149,6 +162,23 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
         <p className="text-sm text-muted">{meta.blurb}</p>
         {capabilities ? (
           <p className="text-xs text-subtle">{capabilities.engineLabel}</p>
+        ) : null}
+        {capabilities && !capabilities.aceStep ? (
+          <div className="mt-2 rounded-xl border border-line bg-bg/60 px-3 py-3">
+            <p className="text-sm text-fg">
+              {capabilities.owner
+                ? "Generate is offline until ACE-Step is configured."
+                : "AI studio is temporarily unavailable."}
+            </p>
+            {capabilities.setupHint ? (
+              <p className="mt-1 text-xs text-muted">{capabilities.setupHint}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                Mashup of two tracks you own still works on-device. Remix can
+                bounce a labeled local drum-bed so you still leave with a listen.
+              </p>
+            )}
+          </div>
         ) : null}
       </section>
 
@@ -317,7 +347,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
             <PlansGrid compact paywall />
           </div>
         ) : null}
-        {mode === "remix" && sourceA && !busy ? (
+        {mode === "remix" && sourceA && !busy && !remixAiBlocked ? (
           <Button
             variant="secondary"
             className="w-full"
@@ -373,7 +403,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
             size="lg"
             className="h-12 min-w-0 flex-1"
             onClick={runPrimary}
-            disabled={busy || !ready}
+            disabled={busy || !ready || Boolean(generateBlocked)}
           >
             <Sparkles />
             <span className="truncate">{cta}</span>

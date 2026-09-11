@@ -33,9 +33,8 @@ function HelpPage() {
               Generate
             </Link>
             {" — "}
-            prompt + style, then play and download. Needs{" "}
-            <span className="font-mono text-fg">REPLICATE_API_TOKEN</span> on
-            this deploy. Uses free AI quota (2 / month).
+            prompt + style, then play and download. Uses free AI quota
+            (2 / month). If AI studio is offline, mashup still works on-device.
           </li>
           <li>
             <Link to="/remix" className="font-medium text-fg underline-offset-4 hover:underline">

@@ -41,7 +41,8 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
     briefLabel: "Song prompt",
     briefPlaceholder:
       "Late-night synth-pop about a last train home, big chorus, female vocal…",
-    defaultPrompt: "",
+    defaultPrompt:
+      "Night-drive synth-pop, warm bass, bright chorus, original vocal, city lights.",
     presets: [
       {
         id: "night_drive",

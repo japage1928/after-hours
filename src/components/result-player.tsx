@@ -100,6 +100,10 @@ export function ResultPlayer({
           Download
         </Button>
       </div>
+      <p className="text-xs text-subtle">
+        Saved to Library on this device. Download a copy so you still have it if
+        you switch browsers.
+      </p>
       {children ? (
         <div className="flex flex-wrap items-center gap-2">{children}</div>
       ) : null}

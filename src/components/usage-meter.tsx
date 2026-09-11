@@ -61,7 +61,7 @@ export function UsageMeter() {
   return (
     <Link
       to="/pricing"
-      className="hidden items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted shadow-border transition-colors hover:text-fg sm:flex"
+      className="flex items-center gap-2 rounded-md bg-surface-2 px-2 py-1.5 text-xs text-muted shadow-border transition-colors hover:text-fg sm:px-3 sm:py-2"
       title="AI generate/remix quota — upgrade for weekly batches"
     >
       <span className="relative grid size-8 place-items-center" aria-hidden>
@@ -93,9 +93,9 @@ export function UsageMeter() {
         {credits > 0 ? (
           <>
             <span className="block font-medium text-fg">
-              {credits} mix credit{credits === 1 ? "" : "s"}
+              {credits} song credit{credits === 1 ? "" : "s"}
             </span>
-            <span className="text-subtle">Ready to mix</span>
+            <span className="text-subtle">Ready to generate</span>
           </>
         ) : entitlement?.ok ? (
           <>

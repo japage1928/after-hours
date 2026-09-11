@@ -1,90 +1,89 @@
-/** Map raw model/quota/upload failures to copy a person can act on. */
+const SETUP_HINT =
+  "Set REPLICATE_API_TOKEN (or ACE_STEP_BASE_URL) on this deployment. Without it, Generate cannot run — we never fake a song.";
 
-export function humanizeStudioError(raw: string): string {
-  const t = (raw || "").trim();
-  if (!t) return "Something went wrong. Try again.";
-  const lower = t.toLowerCase();
+const DEFAULT_MODEL = "fishaudio/ace-step-1.5";
 
-  if (
-    lower.includes("replicate_api_token was rejected") ||
-    (lower.includes("401") && lower.includes("replicate"))
-  ) {
-    return "Replicate rejected the API token. Check REPLICATE_API_TOKEN on this deploy.";
+export function capabilityCopy(opts: {
+  aceStep: boolean;
+  owner: boolean;
+  backend: "replicate" | "host" | "none";
+  model?: string;
+}): { engineLabel: string; setupHint: string | null } {
+  if (opts.aceStep) {
+    const model = opts.model?.trim() || DEFAULT_MODEL;
+    const engineLabel =
+      opts.backend === "host"
+        ? "ACE-Step on your GPU host"
+        : `ACE-Step via Replicate (${model})`;
+    return { engineLabel, setupHint: null };
   }
-  if (lower.includes("replicate billing") || lower.includes("payment method")) {
-    return "Replicate billing needs a payment method. Add one at replicate.com, then try again.";
+  if (opts.owner) {
+    return {
+      engineLabel: "AI studio is not configured on this deployment",
+      setupHint: SETUP_HINT,
+    };
   }
-  if (
-    lower.includes("not configured") ||
-    lower.includes("ace_step_base_url") ||
-    (lower.includes("replicate_api_token") && lower.includes("set ")) ||
-    lower.includes("ace-step is not configured")
-  ) {
-    return "AI music generation isn’t set up on this deploy. Add REPLICATE_API_TOKEN on Vercel Production (ACE-Step via Replicate). ACE_STEP_BASE_URL is an optional self-hosted override.";
-  }
-  if (
-    lower.includes("free tier") ||
-    lower.includes("limit reached") ||
-    lower.includes("mix credit") ||
-    lower.includes("weekly remix") ||
-    lower.includes("buy a") ||
-    lower.includes("start a plan")
-  ) {
-    return t;
-  }
-  if (lower.includes("40 mb") || lower.includes("too large") || lower.includes("too heavy")) {
-    return "That file is too large. Keep each track under 40 MB.";
-  }
-  if (lower.includes("empty")) {
-    return "That file is empty. Pick an M4A or MP3 you actually own.";
-  }
-  if (
-    lower.includes("timeout") ||
-    lower.includes("timed out") ||
-    lower.includes("aborted") ||
-    lower.includes("abort")
-  ) {
-    return "The generator timed out. Try a shorter duration, or try again in a minute.";
-  }
-  if (lower.includes("ace-step failed (401)") || (lower.includes("401") && lower.includes("ace"))) {
-    return "ACE-Step rejected the API key. Check ACE_STEP_API_KEY on this deploy.";
-  }
-  if (
-    lower.includes("ace-step failed (5") ||
-    lower.includes("502") ||
-    lower.includes("503") ||
-    lower.includes("504")
-  ) {
-    return "The ACE-Step music model is down or busy. Try again in a few minutes.";
-  }
-  if (lower.includes("returned no audio") || lower.includes("no audio")) {
-    return "The model returned no audio. Try a simpler prompt or another style.";
-  }
-  if (lower.includes("qa") && (lower.includes("silent") || lower.includes("short"))) {
-    return "Generated audio failed quality checks (too short or too quiet). Try again.";
-  }
-  if (lower.includes("decode") || lower.includes("encodingerror")) {
-    return t.includes("iPhone")
-      ? t
-      : "Couldn’t decode that track. On iPhone, pick an M4A or MP3 from Files or Voice Memos.";
-  }
-  if (lower.includes("ai is not available")) {
-    return "The prompt translator (xAI) isn’t available. Generation can still run on ACE-Step with a local brief.";
-  }
-  return t.length > 280 ? `${t.slice(0, 277)}…` : t;
+  return {
+    engineLabel: "AI studio is temporarily unavailable",
+    setupHint: null,
+  };
 }
 
+/** @deprecated use capabilityCopy — kept for call sites that only need the label. */
 export function engineLabel(opts: {
   aceStep: boolean;
-  xai: boolean;
-  backend?: "host" | "replicate" | "none";
+  xai?: boolean;
+  owner?: boolean;
+  backend?: "replicate" | "host" | "none";
+  model?: string;
 }): string {
-  if (opts.aceStep) {
-    const engine =
-      opts.backend === "host"
-        ? "AI generation powered by ACE-Step (self-hosted)"
-        : "AI generation powered by ACE-Step via Replicate";
-    return opts.xai ? `${engine}; prompts via xAI` : engine;
+  return capabilityCopy({
+    aceStep: opts.aceStep,
+    owner: Boolean(opts.owner),
+    backend: opts.backend ?? (opts.aceStep ? "replicate" : "none"),
+    model: opts.model,
+  }).engineLabel;
+}
+
+export function humanizeStudioError(
+  raw: string,
+  opts?: { owner?: boolean },
+): string {
+  const owner = opts?.owner ?? false;
+  const t = raw.toLowerCase();
+  if (t.includes("quota") || t.includes("out of remixes") || t.includes("upgrade") || t.includes("free tier includes")) {
+    return "You're out of AI songs for this period. Pick a plan below to keep generating.";
   }
-  return "ACE-Step is not configured — add REPLICATE_API_TOKEN on Vercel (or ACE_STEP_BASE_URL).";
+  if (t.includes("sign in") || t.includes("not signed")) {
+    return "Sign in to generate AI songs. Your first two each month are free.";
+  }
+  if (t.includes("not configured") || t.includes("ace-step isn’t configured") || t.includes("ace-step isn't configured")) {
+    if (owner) {
+      return "Generate needs ACE-Step. Set REPLICATE_API_TOKEN (or ACE_STEP_BASE_URL) in Vercel env, then retry.";
+    }
+    return "AI studio is temporarily unavailable. You can still mashup two tracks on-device.";
+  }
+  if (
+    t.includes("replicate") &&
+    (t.includes("auth") ||
+      t.includes("token") ||
+      t.includes("unauthorized") ||
+      t.includes("rejected"))
+  ) {
+    return owner
+      ? "Replicate rejected the API token. Check REPLICATE_API_TOKEN and billing on replicate.com."
+      : "AI studio is temporarily unavailable. Please try again later.";
+  }
+  if (t.includes("timed out") || t.includes("timeout")) {
+    return "The model took too long. Try a shorter duration or retry in a minute.";
+  }
+  if (/\b(502|503|504)\b/.test(t) || t.includes("failed (")) {
+    return owner
+      ? raw
+      : "The music model is down or busy. Try again in a minute.";
+  }
+  if (t.includes("xai") || t.includes("grok")) {
+    return "Style helper is optional. Generate still runs from your prompt.";
+  }
+  return raw;
 }

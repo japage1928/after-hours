@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { StudioPanel } from "@/components/studio-panel";
 import { UsageMeter } from "@/components/usage-meter";
 import { NeedHelpLink } from "@/components/need-help-link";
@@ -12,11 +13,29 @@ import {
   BOOTH_MODES,
   type BoothMode,
 } from "@/lib/booth-mode";
+import { consumeCheckoutSuccessLocation } from "@/lib/checkout-return";
+import { bumpUsageMeter } from "@/lib/usage-events";
 import { cn } from "@/lib/utils";
 
 export function StudioApp({ mode }: { mode: BoothMode }) {
   const user = useCurrentUser();
   const meta = BOOTH_MODES[mode];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cleaned = consumeCheckoutSuccessLocation(
+      window.location.pathname,
+      window.location.search,
+    );
+    if (!cleaned) return;
+    toast.success("You're in. Generate is unlocked.");
+    bumpUsageMeter();
+    const ticks = [800, 2500, 6000].map((ms) =>
+      window.setTimeout(() => bumpUsageMeter(), ms),
+    );
+    window.history.replaceState({}, "", cleaned);
+    return () => ticks.forEach((id) => window.clearTimeout(id));
+  }, []);
 
   return (
     <div className="relative min-h-dvh bg-bg text-fg">

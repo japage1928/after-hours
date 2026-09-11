@@ -263,10 +263,16 @@ export function ProjectsPanel() {
       {tracks === null ? (
         <p className="text-sm text-muted">Loading library…</p>
       ) : tracks.length === 0 ? (
-        <p className="text-sm text-muted">
-          No finished tracks yet. Generate, remix, or mashup once and the result
-          lands here automatically.
-        </p>
+        <div className="flex flex-col gap-3 rounded-xl bg-surface-2 px-4 py-5 shadow-border">
+          <p className="text-sm text-muted">
+            No finished tracks yet. Generate a song (or remix / mashup) and it
+            lands here automatically — play it again, download it, or tap Remix
+            this.
+          </p>
+          <Button asChild>
+            <Link to="/generate">Generate your first song</Link>
+          </Button>
+        </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {tracks.map((track) => (
