@@ -87,12 +87,12 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl min-w-0 flex-col gap-4 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:gap-5 md:px-8">
-      <section className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border sm:gap-3 md:p-6">
+    <div className="mx-auto flex max-w-3xl min-w-0 flex-col gap-4 px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:gap-5 md:px-8">
+      <section className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border sm:gap-2 md:p-5">
         <p className="text-xs font-medium tracking-widest text-muted uppercase">
           {meta.eyebrow}
         </p>
-        <h1 className="font-display text-[2rem] leading-none tracking-tight text-fg sm:text-4xl md:text-5xl">
+        <h1 className="font-display text-[2rem] leading-none tracking-tight text-fg sm:text-4xl">
           {meta.title}
         </h1>
         <p className="text-sm text-muted">{meta.blurb}</p>
@@ -168,7 +168,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
               onChange={(e) => setLyrics(e.target.value)}
               placeholder="Paste your own lyrics, or leave blank and AI will write them."
               maxLength={4000}
-              className="min-h-24"
+              className="min-h-20"
               disabled={instrumental}
             />
           </label>
@@ -242,15 +242,6 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
       </p>
 
       <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
-        <Button
-          size="lg"
-          className="h-12 w-full"
-          onClick={runPrimary}
-          disabled={busy || !ready}
-        >
-          <Sparkles />
-          {cta}
-        </Button>
         {busy ? (
           <div className="h-1 overflow-hidden rounded-full bg-surface-2">
             <div className="studio-progress h-full w-1/3 rounded-full bg-accent" />
@@ -286,6 +277,21 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
           onDownload={downloadResult}
         />
       ) : null}
+
+      <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-8">
+          <Button
+            size="lg"
+            className="h-12 min-w-0 flex-1"
+            onClick={runPrimary}
+            disabled={busy || !ready}
+          >
+            <Sparkles />
+            <span className="truncate">{cta}</span>
+          </Button>
+        </div>
+        <div className="h-[env(safe-area-inset-bottom)]" />
+      </footer>
     </div>
   );
 }
