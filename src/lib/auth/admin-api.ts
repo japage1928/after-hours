@@ -13,6 +13,12 @@ import {
   newId,
 } from "@/lib/billing/usage";
 import { getSql } from "@/lib/db";
+import {
+  nextSupportStatus,
+  parseAdminUpdateTicket,
+  type SupportCategory,
+  type SupportStatus,
+} from "@/lib/support";
 
 async function requireAdminSession() {
   const request = getRequest();
@@ -62,7 +68,7 @@ export const getAdminBootstrap = createServerFn({ method: "GET" }).handler(
   async () => {
     const user = await requireAdminSession();
     const sql = await getSql();
-    const [users, stuck, activeSubs] = await Promise.all([
+    const [users, stuck, activeSubs, openTickets] = await Promise.all([
       sql<{ n: number }>`select count(*)::int as n from "user"`,
       sql<{ n: number }>`
         select count(*)::int as n from billing_payment
@@ -71,6 +77,9 @@ export const getAdminBootstrap = createServerFn({ method: "GET" }).handler(
       sql<{ n: number }>`
         select count(*)::int as n from billing_subscription
         where status in ('active', 'trialing', 'past_due')
+      `,
+      sql<{ n: number }>`
+        select count(*)::int as n from support_ticket where status = 'open'
       `,
     ]);
     return {
@@ -82,6 +91,7 @@ export const getAdminBootstrap = createServerFn({ method: "GET" }).handler(
         users: Number(users[0]?.n ?? 0),
         stuckPayments: Number(stuck[0]?.n ?? 0),
         activeSubs: Number(activeSubs[0]?.n ?? 0),
+        openTickets: Number(openTickets[0]?.n ?? 0),
       },
     };
   },
@@ -454,6 +464,112 @@ export type AdminAuditRow = {
   detailJson: string;
   createdAt: string;
 };
+
+export type AdminTicketRow = {
+  id: string;
+  userId: string;
+  email: string | null;
+  userName: string | null;
+  category: SupportCategory;
+  message: string;
+  status: SupportStatus;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function isoTimestamp(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+export const listAdminTickets = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminTicketRow[]> => {
+    await requireAdminSession();
+    const sql = await getSql();
+    const rows = await sql<{
+      id: string;
+      user_id: string;
+      email: string | null;
+      user_email: string | null;
+      user_name: string | null;
+      category: string;
+      message: string;
+      status: string;
+      admin_note: string | null;
+      created_at: Date | string;
+      updated_at: Date | string;
+    }>`
+      select t.id, t.user_id, t.email, t.category, t.message, t.status,
+             t.admin_note, t.created_at, t.updated_at,
+             u.email as user_email, u.name as user_name
+      from support_ticket t
+      left join "user" u on u.id = t.user_id
+      order by
+        case when t.status = 'open' then 0 else 1 end,
+        t.created_at desc
+      limit 200
+    `;
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      email: r.email ?? r.user_email,
+      userName: r.user_name,
+      category: r.category as SupportCategory,
+      message: r.message,
+      status: r.status as SupportStatus,
+      adminNote: r.admin_note,
+      createdAt: isoTimestamp(r.created_at),
+      updatedAt: isoTimestamp(r.updated_at),
+    }));
+  },
+);
+
+export const adminUpdateTicket = createServerFn({ method: "POST" })
+  .validator((input: unknown) => parseAdminUpdateTicket(input))
+  .handler(async ({ data }) => {
+    const admin = await requireAdminSession();
+    const sql = await getSql();
+    const existing = await sql<{
+      id: string;
+      user_id: string;
+      status: string;
+      admin_note: string | null;
+    }>`
+      select id, user_id, status, admin_note
+      from support_ticket
+      where id = ${data.ticketId}
+      limit 1
+    `;
+    const ticket = existing[0];
+    if (!ticket) throw new Error("Ticket not found");
+    if (ticket.status !== "open" && ticket.status !== "resolved") {
+      throw new Error("Ticket has an unknown status");
+    }
+    const status = nextSupportStatus(
+      ticket.status,
+      data.status,
+    );
+    const adminNote =
+      data.adminNote === undefined
+        ? ticket.admin_note
+        : data.adminNote
+          ? data.adminNote
+          : null;
+    await sql`
+      update support_ticket set
+        status = ${status},
+        admin_note = ${adminNote},
+        updated_at = CURRENT_TIMESTAMP
+      where id = ${data.ticketId}
+    `;
+    await audit(admin.id, "update_support_ticket", ticket.user_id, {
+      ticketId: data.ticketId,
+      status,
+      hadNote: Boolean(adminNote),
+    });
+    return { ok: true as const, status };
+  });
 
 export const listAdminAudit = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminAuditRow[]> => {

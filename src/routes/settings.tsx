@@ -12,6 +12,7 @@ const LEGACY_TABS = [
   "profile",
   "account",
   "billing",
+  "support",
 ] as const;
 
 const settingsSearchSchema = z.object({

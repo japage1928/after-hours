@@ -65,10 +65,13 @@ test("auth schema lives under migrations/auth until sign-in copies it up", () =>
     assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), []);
     return;
   }
-  // Sign-in on: the verbatim copy is intentional and pending on a fresh DB.
-  assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), [
-    { name: "0001_auth.sql", path: "0001_auth.sql" },
-  ]);
+  // Sign-in on: auth schema is first, then later app files, all pending on a
+  // fresh DB. Applied files are keyed by basename so a copy of 0001_auth.sql
+  // is never re-run.
+  const pending = pendingMigrations(readdirSync(migrationsDir), []);
+  assert.deepEqual(pending[0], { name: "0001_auth.sql", path: "0001_auth.sql" });
+  assert.ok(pending.some((m) => m.name === "0002_billing.sql"));
+  assert.ok(pending.some((m) => m.name === "0003_support.sql"));
 });
 
 test("this workspace's auth schema copy is byte-identical to its source", () => {

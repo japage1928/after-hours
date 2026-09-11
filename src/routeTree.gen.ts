@@ -20,6 +20,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RemixRouteImport } from './routes/remix'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 
@@ -78,6 +79,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/support'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/support'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   id:
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/support'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   fileRoutesById: FileRoutesById
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   ProjectsRoute: typeof ProjectsRoute
   RemixRoute: typeof RemixRoute
   SettingsRoute: typeof SettingsRoute
+  SupportRoute: typeof SupportRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsRoute: ProjectsRoute,
   RemixRoute: RemixRoute,
   SettingsRoute: SettingsRoute,
+  SupportRoute: SupportRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }
