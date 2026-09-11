@@ -21,18 +21,22 @@ export async function currentUserEmail(
 }
 
 /**
- * Gate AI remix/mash behind free monthly quota, subscription weekly batch,
+ * Gate AI features behind free monthly quota, subscription weekly batch,
  * song credit, or admin allowlist.
+ *
+ * `allowSongBundle` is for the lyrics→vocal chain only. An open song bundle
+ * must not unlock unpaid AI mix plans.
  */
 export async function assertAiAllowed(
   userId: string,
+  opts?: { allowSongBundle?: boolean },
 ): Promise<string | null> {
   if (process.env.VITE_AUTH_ENABLED === "false" || userId === "dev-user") {
     return null;
   }
   const email = await currentUserEmail(userId);
   if (isAdminEmail(email)) return null;
-  if (await hasOpenSongBundle(userId)) return null;
+  if (opts?.allowSongBundle && (await hasOpenSongBundle(userId))) return null;
   const entitlement = await getEntitlement(userId);
   if (entitlement.ok) return null;
   return (

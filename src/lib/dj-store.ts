@@ -8,6 +8,7 @@ import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
+import type { BoothMode } from "@/lib/booth-mode";
 
 const MAX_BYTES = 40 * 1024 * 1024;
 
@@ -15,12 +16,15 @@ export type BoothStatus = "idle" | "loading" | "planning" | "mixing" | "error";
 
 type BoothState = {
   ready: boolean;
+  mode: BoothMode;
   status: BoothStatus;
   statusText: string;
   error: string | null;
   prompt: string;
   cue: string | null;
   plan: MixPlan | null;
+  /** true when last applied plan came from the AI path and was charged */
+  usedAi: boolean | null;
   needsUpgrade: boolean;
   xfader: number;
   playing: boolean;
@@ -35,6 +39,7 @@ type BoothState = {
   eqA: { low: number; mid: number; high: number };
   eqB: { low: number; mid: number; high: number };
   hydrate: () => Promise<void>;
+  setMode: (mode: BoothMode) => void;
   setPrompt: (v: string) => void;
   setXfader: (v: number) => void;
   setVolume: (id: DeckId, v: number) => void;
@@ -47,14 +52,25 @@ type BoothState = {
   dropMix: () => Promise<void>;
   runLocalMix: () => Promise<void>;
   playMash: () => Promise<void>;
+  pauseMix: () => void;
   stopMix: () => void;
 };
 
 let tickBound = false;
+let lastTickMs = 0;
+let mixGeneration = 0;
+let mixInFlight = false;
 
 function snapshot(): Pick<
   BoothState,
-  "xfader" | "playing" | "playingA" | "playingB" | "timeA" | "timeB" | "deckA" | "deckB"
+  | "xfader"
+  | "playing"
+  | "playingA"
+  | "playingB"
+  | "timeA"
+  | "timeB"
+  | "deckA"
+  | "deckB"
 > {
   return {
     xfader: djEngine.xfaderValue(),
@@ -68,14 +84,36 @@ function snapshot(): Pick<
   };
 }
 
+async function runEnginePlan(
+  plan: MixPlan,
+  mode: BoothMode,
+  gen: number,
+  set: (partial: Partial<BoothState>) => void,
+) {
+  await djEngine.runPlan(plan, {
+    booth: mode,
+    onComplete: () => {
+      if (gen !== mixGeneration) return;
+      set({
+        status: "idle",
+        statusText: plan.cue || "Mix complete.",
+        ...snapshot(),
+      });
+    },
+  });
+  if (gen === mixGeneration) set(snapshot());
+}
+
 export const useBooth = create<BoothState>((set, get) => ({
   ready: false,
+  mode: "remix",
   status: "idle",
   statusText: "Load song A and song B.",
   error: null,
   prompt: "",
   cue: null,
   plan: null,
+  usedAi: null,
   needsUpgrade: false,
   xfader: -0.15,
   playing: false,
@@ -89,6 +127,8 @@ export const useBooth = create<BoothState>((set, get) => ({
   volB: 0.92,
   eqA: { low: 0, mid: 0, high: 0 },
   eqB: { low: 0, mid: 0, high: 0 },
+
+  setMode: (mode) => set({ mode }),
 
   setPrompt: (prompt) => set({ prompt }),
 
@@ -112,6 +152,10 @@ export const useBooth = create<BoothState>((set, get) => ({
     if (!tickBound) {
       tickBound = true;
       djEngine.onTick((t) => {
+        const now = performance.now();
+        // ~20 Hz is enough for meters; still update immediately when stopped.
+        if (t.playing && now - lastTickMs < 50) return;
+        lastTickMs = now;
         set({
           timeA: t.a,
           timeB: t.b,
@@ -139,7 +183,8 @@ export const useBooth = create<BoothState>((set, get) => ({
     if (verdict === "no") {
       set({
         status: "error",
-        error: "That file is not audio. On iPhone, choose an M4A or MP3 from Files or Voice Memos.",
+        error:
+          "That file is not audio. On iPhone, choose an M4A or MP3 from Files or Voice Memos.",
         statusText: "Need an audio file.",
       });
       return;
@@ -174,6 +219,9 @@ export const useBooth = create<BoothState>((set, get) => ({
       set({
         status: "idle",
         statusText: `${label} · ${guess.bpm} BPM`,
+        plan: null,
+        usedAi: null,
+        cue: null,
         ...snapshot(),
       });
     } catch (err) {
@@ -203,23 +251,36 @@ export const useBooth = create<BoothState>((set, get) => ({
 
   syncB: () => {
     djEngine.syncToA();
-    set({ statusText: `B locked to ${djEngine.deck("a").bpm} BPM`, ...snapshot() });
+    set({
+      statusText: `B locked to ${djEngine.deck("a").bpm} BPM`,
+      ...snapshot(),
+    });
   },
 
   dropMix: async () => {
-    const { deckA, deckB, prompt } = get();
+    const { deckA, deckB, prompt, mode } = get();
     if (!deckA.hasTrack || !deckB.hasTrack) {
-      set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." });
+      set({
+        status: "error",
+        error: "Load both songs first.",
+        statusText: "Need song A and song B.",
+      });
       return;
     }
+    if (mixInFlight) return;
+    mixInFlight = true;
+    const gen = ++mixGeneration;
+
     studioEngine.stop();
     set({
       status: "planning",
-      statusText: "Mashing the two songs",
+      statusText:
+        mode === "mashup" ? "Building the mashup…" : "Building the remix…",
       error: null,
       cue: null,
       needsUpgrade: false,
     });
+
     const input = {
       nameA: deckA.name,
       nameB: deckB.name,
@@ -228,45 +289,78 @@ export const useBooth = create<BoothState>((set, get) => ({
       durationA: deckA.duration,
       durationB: deckB.duration,
       prompt: prompt.trim(),
+      mode,
     };
-    let plan: MixPlan = fallbackPlan(input);
-    let needsUpgrade = false;
+
     try {
-      const res = await planMix({ data: input });
-      plan = res.plan;
-      if (!res.ok && "needsUpgrade" in res && res.needsUpgrade) {
-        needsUpgrade = true;
+      let plan: MixPlan = fallbackPlan(input);
+      let usedAi = false;
+
+      try {
+        const res = await planMix({ data: input });
+        if (gen !== mixGeneration) return;
+
+        if (!res.ok && "needsUpgrade" in res && res.needsUpgrade) {
+          set({
+            plan: null,
+            cue: null,
+            usedAi: null,
+            needsUpgrade: true,
+            status: "idle",
+            statusText: "AI planning needs a plan — pick one below, or continue free.",
+            error: res.error,
+          });
+          return;
+        }
+
+        plan = res.plan;
+        usedAi = Boolean(res.ok && res.usedAi);
+      } catch (err) {
+        if (gen !== mixGeneration) return;
+        plan = fallbackPlan(input);
+        usedAi = false;
         set({
-          plan,
-          cue: null,
-          needsUpgrade: true,
-          status: "idle",
-          statusText: "AI planning needs a plan — pick one below.",
-          error: res.error,
+          error:
+            err instanceof Error
+              ? `${err.message} — playing local phrase lock.`
+              : "AI planner failed — playing local phrase lock.",
         });
-        return;
       }
-    } catch {
-      /* local plan */
+
+      if (gen !== mixGeneration) return;
+
+      set({
+        plan,
+        cue: plan.cue,
+        usedAi,
+        needsUpgrade: false,
+        status: "mixing",
+        statusText: usedAi
+          ? plan.cue
+          : `${plan.cue} (local)`,
+        error: get().error,
+      });
+
+      await runEnginePlan(plan, mode, gen, set);
+    } finally {
+      mixInFlight = false;
     }
-    set({
-      plan,
-      cue: plan.cue,
-      needsUpgrade,
-      status: "mixing",
-      statusText: plan.cue,
-      error: null,
-    });
-    await djEngine.runPlan(plan);
-    set(snapshot());
   },
 
   runLocalMix: async () => {
-    const { deckA, deckB, prompt } = get();
+    const { deckA, deckB, prompt, mode } = get();
     if (!deckA.hasTrack || !deckB.hasTrack) {
-      set({ status: "error", error: "Load both songs first.", statusText: "Need song A and song B." });
+      set({
+        status: "error",
+        error: "Load both songs first.",
+        statusText: "Need song A and song B.",
+      });
       return;
     }
+    if (mixInFlight) return;
+    mixInFlight = true;
+    const gen = ++mixGeneration;
+
     studioEngine.stop();
     const input = {
       nameA: deckA.name,
@@ -276,32 +370,62 @@ export const useBooth = create<BoothState>((set, get) => ({
       durationA: deckA.duration,
       durationB: deckB.duration,
       prompt: prompt.trim(),
+      mode,
     };
     const plan = fallbackPlan(input);
     set({
       plan,
       cue: plan.cue,
+      usedAi: false,
       needsUpgrade: false,
       status: "mixing",
-      statusText: plan.cue,
+      statusText: `${plan.cue} (local)`,
       error: null,
     });
-    await djEngine.runPlan(plan);
-    set(snapshot());
+    try {
+      await runEnginePlan(plan, mode, gen, set);
+    } finally {
+      mixInFlight = false;
+    }
   },
 
   playMash: async () => {
-    const plan = get().plan;
+    const { plan, mode, needsUpgrade } = get();
+    // Don't re-trigger AI planner from Play when paywalled — use local.
+    if (needsUpgrade) {
+      await get().runLocalMix();
+      return;
+    }
     if (plan) {
+      if (mixInFlight) return;
+      mixInFlight = true;
+      const gen = ++mixGeneration;
       studioEngine.stop();
-      await djEngine.runPlan(plan);
-      set({ status: "mixing", statusText: plan.cue, ...snapshot() });
+      set({ status: "mixing", statusText: plan.cue, error: null });
+      try {
+        await runEnginePlan(plan, mode, gen, set);
+      } finally {
+        mixInFlight = false;
+      }
       return;
     }
     await get().dropMix();
   },
 
+  pauseMix: () => {
+    mixGeneration += 1;
+    mixInFlight = false;
+    djEngine.pauseAll();
+    set({
+      status: "idle",
+      statusText: "Paused.",
+      ...snapshot(),
+    });
+  },
+
   stopMix: () => {
+    mixGeneration += 1;
+    mixInFlight = false;
     djEngine.stopAll();
     set({
       status: "idle",

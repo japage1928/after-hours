@@ -14,6 +14,12 @@ export type DeckInfo = {
   hasTrack: boolean;
 };
 
+export type RunPlanOptions = {
+  /** Mashup holds a blend; remix hands off fully to B. */
+  booth?: "mashup" | "remix";
+  onComplete?: () => void;
+};
+
 type DeckNodes = {
   buffer: AudioBuffer | null;
   info: DeckInfo;
@@ -24,6 +30,7 @@ type DeckNodes = {
   high: BiquadFilterNode | null;
   hp: BiquadFilterNode | null;
   playing: boolean;
+  /** AudioContext time when playback at startOffset began (or will begin). */
   originTime: number;
   startOffset: number;
   rate: number;
@@ -113,14 +120,23 @@ export class DjEngine {
     return this.decks[id].info;
   }
 
+  deckEq(id: DeckId): { low: number; mid: number; high: number } {
+    return { ...this.decks[id].eq };
+  }
+
+  /**
+   * Position in the buffer (audio seconds), stable across playbackRate changes.
+   * Scheduled-but-not-started sources report startOffset (no negative times).
+   */
   deckTime(id: DeckId): number {
     const d = this.decks[id];
     if (!this.ctx || !d.playing) return d.startOffset;
     const elapsed = (this.ctx.currentTime - d.originTime) * d.rate;
+    if (elapsed < 0) return d.startOffset;
     const dur = d.info.duration;
     if (!dur) return d.startOffset;
     const pos = d.startOffset + elapsed;
-    return d.info.looping ? pos % dur : Math.min(dur, pos);
+    return d.info.looping ? pos % dur : Math.min(dur, Math.max(0, pos));
   }
 
   onTick(fn: TickFn): () => void {
@@ -141,7 +157,8 @@ export class DjEngine {
     }
     const AC =
       window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
     const ctx = new AC();
     this.ctx = ctx;
     const master = ctx.createGain();
@@ -166,12 +183,6 @@ export class DjEngine {
         new Promise<void>((resolve) => window.setTimeout(resolve, 400)),
       ]);
     }
-    this.startPump();
-  }
-
-  /** Demo loops removed — decks stay empty until the user loads real tracks. */
-  async loadDemos(): Promise<void> {
-    await this.ensure();
   }
 
   async decodeFile(file: File): Promise<AudioBuffer> {
@@ -179,10 +190,11 @@ export class DjEngine {
     if (!this.ctx) throw new Error("Audio is not ready.");
     const data = await file.arrayBuffer();
     try {
-      // slice() copies — required on some Safari builds that detach the buffer.
       return await this.ctx.decodeAudioData(data.slice(0));
     } catch {
-      throw new Error("Safari couldn’t decode that audio.");
+      throw new Error(
+        "Couldn’t decode that audio. Try an M4A or MP3 under 40 MB.",
+      );
     }
   }
 
@@ -232,7 +244,9 @@ export class DjEngine {
     const d = this.decks[id];
     d.eq[band] = Math.max(-1, Math.min(1, v));
     const node = band === "low" ? d.low : band === "mid" ? d.mid : d.high;
-    if (node && this.ctx) node.gain.setTargetAtTime(d.eq[band] * 10, this.ctx.currentTime, 0.04);
+    if (node && this.ctx) {
+      node.gain.setTargetAtTime(d.eq[band] * 10, this.ctx.currentTime, 0.04);
+    }
   }
 
   setFilter(id: DeckId, v: number) {
@@ -243,17 +257,15 @@ export class DjEngine {
 
   syncToA() {
     this.targetBpm = this.decks.a.info.bpm || 120;
-    this.decks.a.rate = this.rateFor("a");
-    this.decks.b.rate = this.rateFor("b");
-    this.retriggerRates();
+    this.applyRate("a", this.rateFor("a"));
+    this.applyRate("b", this.rateFor("b"));
     this.emit();
   }
 
   setTargetBpm(bpm: number) {
     this.targetBpm = bpm;
-    this.decks.a.rate = this.rateFor("a");
-    this.decks.b.rate = this.rateFor("b");
-    this.retriggerRates();
+    this.applyRate("a", this.rateFor("a"));
+    this.applyRate("b", this.rateFor("b"));
   }
 
   async playDeck(id: DeckId, offset?: number, when?: number) {
@@ -267,16 +279,22 @@ export class DjEngine {
     src.playbackRate.value = d.rate;
     src.connect(d.hp ?? d.gain);
     const startAt = when ?? this.ctx.currentTime;
-    const off = Math.max(0, Math.min(d.info.duration - 0.05, offset ?? d.startOffset));
+    const off = Math.max(
+      0,
+      Math.min(d.info.duration - 0.05, offset ?? d.startOffset),
+    );
     try {
       src.start(startAt, off);
-    } catch {
+    } catch (err) {
+      console.error("[dj] playDeck failed", id, err);
       return;
     }
     src.onended = () => {
       if (d.source === src) {
         d.playing = false;
+        d.startOffset = d.info.looping ? 0 : d.info.duration;
         this.emit();
+        this.ensurePump();
       }
     };
     d.source = src;
@@ -284,6 +302,7 @@ export class DjEngine {
     d.startOffset = off;
     d.originTime = startAt;
     this.emit();
+    this.ensurePump();
   }
 
   pauseDeck(id: DeckId) {
@@ -308,6 +327,13 @@ export class DjEngine {
     this.stopDeck("b");
   }
 
+  /** Pause both decks and cancel an in-flight mix automation. */
+  pauseAll() {
+    this.clearMixTimer();
+    this.pauseDeck("a");
+    this.pauseDeck("b");
+  }
+
   seekDeck(id: DeckId, seconds: number) {
     const d = this.decks[id];
     const next = Math.max(0, Math.min(d.info.duration, seconds));
@@ -319,22 +345,18 @@ export class DjEngine {
     if (was) void this.playDeck(id, next);
   }
 
-  async playBoth() {
-    await this.ensure();
-    this.syncToA();
-    await this.playDeck("a", this.decks.a.startOffset);
-    await this.playDeck("b", this.decks.b.startOffset);
-  }
-
-  async runPlan(plan: MixPlan) {
+  async runPlan(plan: MixPlan, opts: RunPlanOptions = {}) {
     await this.ensure();
     if (!this.ctx) return;
     this.stopAll();
     this.setTargetBpm(plan.targetBpm);
+
+    const booth = opts.booth ?? "remix";
+    const endXfader = booth === "mashup" ? 0.15 : 1;
+
     this.setXfader(-1);
     this.setFilter("a", 0);
     this.setFilter("b", 0);
-    // Reset EQ; bass-swap starts with full lows on A.
     this.setEq("a", "low", 0);
     this.setEq("a", "mid", 0);
     this.setEq("a", "high", 0);
@@ -342,56 +364,82 @@ export class DjEngine {
     this.setEq("b", "mid", 0);
     this.setEq("b", "high", 0);
 
+    const rateA = this.decks.a.rate || 1;
+    // Plan times are in *track* seconds; convert mix-in to wall-clock for scheduling.
+    const mixInWall = Math.max(0.25, plan.mixInSec / rateA);
+    const fadeWall = Math.max(0.08, plan.crossfadeSec);
+    const holdWall = Math.max(0, plan.holdSec);
+
+    const aOff =
+      plan.aOffsetSec > 0.05
+        ? plan.aOffsetSec
+        : this.decks.a.info.offset || 0;
+    const bOff =
+      plan.bOffsetSec > 0.05
+        ? plan.bOffsetSec
+        : this.decks.b.info.offset || 0;
+
     const now = this.ctx.currentTime + 0.08;
-    await this.playDeck("a", plan.aOffsetSec, now);
-    const bWhen = now + plan.mixInSec;
-    await this.playDeck("b", plan.bOffsetSec, bWhen);
+    await this.playDeck("a", aOff, now);
+    await this.playDeck("b", bOff, now + mixInWall);
 
     const t0 = performance.now();
-    const mixInMs = plan.mixInSec * 1000;
-    const fadeMs = Math.max(80, plan.crossfadeSec * 1000);
-    const holdMs = plan.holdSec * 1000;
+    const mixInMs = mixInWall * 1000;
+    const fadeMs = fadeWall * 1000;
+    const holdMs = holdWall * 1000;
     const isCut = plan.style === "cut" || plan.technique === "power_cut";
+    const totalMs = mixInMs + fadeMs + holdMs;
 
     const tick = () => {
       const t = performance.now() - t0;
       if (t < mixInMs) {
         this.setXfader(-1);
-        if (plan.sweepA) this.setFilter("a", 0);
         if (plan.bassSwap) {
           this.setEq("a", "low", 0);
           this.setEq("b", "low", -1);
         }
       } else if (t < mixInMs + fadeMs) {
         const u = Math.min(1, (t - mixInMs) / fadeMs);
-        // Ease for blends; near-instant for power cuts.
-        const shaped = isCut ? Math.min(1, u * 8) : u * u * (3 - 2 * u);
-        this.setXfader(-1 + shaped * 2);
+        const shaped = isCut ? Math.min(1, u * 12) : u * u * (3 - 2 * u);
+        const x = -1 + shaped * (1 + endXfader);
+        this.setXfader(Math.min(endXfader, x));
         if (plan.sweepA || plan.technique === "filter_blend") {
           this.setFilter("a", shaped);
         }
         if (plan.technique === "echo_out") {
           this.setFilter("a", Math.min(1, shaped * 1.2));
-          this.setEq("a", "high", shaped * 0.4);
+          this.setEq("a", "high", shaped * 0.45);
+          this.setEq("a", "mid", -shaped * 0.25);
         }
         if (plan.bassSwap) {
-          // Classic DJ bass swap across the transition.
           this.setEq("a", "low", -shaped);
           this.setEq("b", "low", -1 + shaped);
         }
       } else {
-        this.setXfader(1);
-        if (plan.sweepA) this.setFilter("a", 1);
+        this.setXfader(endXfader);
+        if (plan.sweepA || plan.technique === "echo_out") {
+          this.setFilter("a", 1);
+        }
         if (plan.bassSwap) {
           this.setEq("a", "low", -1);
           this.setEq("b", "low", 0);
         }
+        // Mute outgoing deck after a full remix handoff to save CPU.
+        if (booth === "remix" && this.decks.a.playing) {
+          this.pauseDeck("a");
+        }
       }
-      if (t < mixInMs + fadeMs + holdMs) {
+      if (t < totalMs) {
         this.mixTimer = window.requestAnimationFrame(tick);
+        this.ensurePump();
+      } else {
+        this.mixTimer = 0;
+        opts.onComplete?.();
+        this.ensurePump();
       }
     };
     this.mixTimer = window.requestAnimationFrame(tick);
+    this.ensurePump();
   }
 
   private rateFor(id: DeckId): number {
@@ -399,6 +447,18 @@ export class DjEngine {
     const target = this.targetBpm ?? native;
     const rate = target / native;
     return Math.min(1.35, Math.max(0.72, rate));
+  }
+
+  /** Change rate without jumping position (re-anchors originTime). */
+  private applyRate(id: DeckId, rate: number) {
+    const d = this.decks[id];
+    if (d.playing && this.ctx) {
+      const pos = this.deckTime(id);
+      d.startOffset = Math.max(0, pos);
+      d.originTime = this.ctx.currentTime;
+    }
+    d.rate = rate;
+    if (d.source) d.source.playbackRate.value = rate;
   }
 
   private wireDeck(id: DeckId) {
@@ -456,13 +516,6 @@ export class DjEngine {
     d.source = null;
   }
 
-  private retriggerRates() {
-    (["a", "b"] as DeckId[]).forEach((id) => {
-      const d = this.decks[id];
-      if (d.source) d.source.playbackRate.value = d.rate;
-    });
-  }
-
   private clearMixTimer() {
     if (this.mixTimer) cancelAnimationFrame(this.mixTimer);
     this.mixTimer = 0;
@@ -483,10 +536,15 @@ export class DjEngine {
 
   private pump = () => {
     this.emit();
-    this.raf = requestAnimationFrame(this.pump);
+    if (this.isPlaying() || this.mixTimer) {
+      this.raf = requestAnimationFrame(this.pump);
+    } else {
+      this.pumping = false;
+      this.raf = 0;
+    }
   };
 
-  private startPump() {
+  private ensurePump() {
     if (this.pumping) return;
     this.pumping = true;
     this.raf = requestAnimationFrame(this.pump);

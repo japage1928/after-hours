@@ -39,6 +39,7 @@ export const PlanMixInputSchema = z.object({
   durationA: z.number().min(1).max(900),
   durationB: z.number().min(1).max(900),
   prompt: z.string().max(400),
+  mode: z.enum(["mashup", "remix"]).optional(),
 });
 export type PlanMixInput = z.infer<typeof PlanMixInputSchema>;
 
@@ -55,7 +56,8 @@ function pickTechnique(
   if (/cut|drop|slam|power/.test(p)) return "power_cut";
   if (/echo|delay|out/.test(p)) return "echo_out";
   if (/filter|sweep|wash/.test(p)) return "filter_blend";
-  if (/long|smooth|blend|house/.test(p)) return "long_blend";
+  if (/long|smooth|blend|house|mash/.test(p)) return "long_blend";
+  if (input.mode === "mashup") return "long_blend";
   const bpmGap = Math.abs(input.bpmA - input.bpmB);
   if (bpmGap > 12) return "filter_blend";
   if (input.bpmA >= 128 && input.bpmB >= 128) return "bass_swap";
@@ -68,6 +70,7 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
   const targetBpm = Math.round((input.bpmA + input.bpmB) / 2);
   const barA = (60 / input.bpmA) * 4;
   const barB = (60 / input.bpmB) * 4;
+  const mashup = input.mode === "mashup";
 
   // Enter after an 8–16 bar phrase on A; cue B near a likely drop (bar 8/16).
   const phraseBars = input.durationA > barA * 24 ? 16 : 8;
@@ -81,26 +84,36 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
   );
 
   const style: MixPlan["style"] =
-    technique === "power_cut"
-      ? "cut"
-      : technique === "echo_out"
-        ? "echo_fade"
-        : "blend";
+    mashup
+      ? "blend"
+      : technique === "power_cut"
+        ? "cut"
+        : technique === "echo_out"
+          ? "echo_fade"
+          : "blend";
 
   const crossfadeSec =
-    style === "cut"
-      ? Math.max(0.5, barA)
-      : technique === "long_blend"
-        ? Math.min(barA * 8, 24)
-        : Math.min(barA * 4, 16);
+    mashup
+      ? Math.min(barA * 8, 28)
+      : style === "cut"
+        ? Math.max(0.5, barA)
+        : technique === "long_blend"
+          ? Math.min(barA * 8, 24)
+          : Math.min(barA * 4, 16);
 
   const cues: Record<MixPlan["technique"], string> = {
     bass_swap: `Beat-match ${targetBpm}. Ride A, kill the bass on A, bring B’s kick in over ${Math.round(crossfadeSec)}s.`,
     filter_blend: `Open a high-pass on A into the mix, lock ${targetBpm}, wash into B.`,
     power_cut: `Phrase-match, then hard cut to B on the downbeat at ${targetBpm}.`,
-    long_blend: `Long blend at ${targetBpm} — EQ out A’s lows while B takes the floor.`,
+    long_blend: mashup
+      ? `Long mash at ${targetBpm} — keep both grooves in the blend.`
+      : `Long blend at ${targetBpm} — EQ out A’s lows while B takes the floor.`,
     echo_out: `Echo A out as B lands on the one at ${targetBpm}.`,
   };
+
+  const holdSec = mashup
+    ? Math.min(barB * 16, Math.max(12, input.durationB - bOffsetSec - 1))
+    : Math.min(barB * 8, input.durationB * 0.45);
 
   return {
     targetBpm,
@@ -108,12 +121,12 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
     bOffsetSec,
     mixInSec: Math.max(barA * 4, mixInSec),
     crossfadeSec,
-    holdSec: Math.min(barB * 8, input.durationB * 0.45),
+    holdSec,
     sweepA: technique === "filter_blend" || technique === "echo_out",
     bassSwap: technique === "bass_swap" || technique === "long_blend",
     style,
-    technique,
-    cue: cues[technique],
+    technique: mashup && technique === "power_cut" ? "long_blend" : technique,
+    cue: cues[mashup && technique === "power_cut" ? "long_blend" : technique],
   };
 }
 
@@ -124,6 +137,29 @@ function extractJson(text: string): unknown {
   const end = raw.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("No mix plan.");
   return JSON.parse(raw.slice(start, end + 1));
+}
+
+function clampPlan(parsed: MixPlan, data: PlanMixInput): MixPlan {
+  const aMax = Math.max(0, data.durationA - 2);
+  const bMax = Math.max(0, data.durationB - 2);
+  const aOffsetSec = Math.min(Math.max(0, parsed.aOffsetSec), aMax);
+  const bOffsetSec = Math.min(Math.max(0, parsed.bOffsetSec), bMax);
+  const remainingA = Math.max(2, data.durationA - aOffsetSec - 2);
+  const mixInSec = Math.min(Math.max(0, parsed.mixInSec), remainingA);
+  const crossfadeSec = Math.min(
+    Math.max(0.5, parsed.crossfadeSec),
+    Math.min(32, Math.max(0.5, remainingA - mixInSec + 4)),
+  );
+  const remainingB = Math.max(0, data.durationB - bOffsetSec - 0.5);
+  const holdSec = Math.min(Math.max(0, parsed.holdSec), remainingB);
+  return {
+    ...parsed,
+    aOffsetSec,
+    bOffsetSec,
+    mixInSec,
+    crossfadeSec,
+    holdSec,
+  };
 }
 
 export const planMix = createServerFn({ method: "POST" })
@@ -160,6 +196,8 @@ export const planMix = createServerFn({ method: "POST" })
         return { ok: true, plan: local, usedAi: false };
       }
 
+      const boothLabel = data.mode === "mashup" ? "mashup" : "remix";
+
       try {
         const res = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
@@ -177,20 +215,26 @@ export const planMix = createServerFn({ method: "POST" })
             messages: [
               {
                 role: "system",
-                content: `You are a working club DJ building a REAL two-deck remix transition — not a random crossfade.
+                content: `You are a working club DJ building a REAL two-deck ${boothLabel} transition — not a random crossfade.
 Use standard DJ craft:
 - Beat-match to one target BPM
 - Align phrase boundaries (8/16/32 bars) for mix-in
 - Prefer bass swaps (EQ kill lows on outgoing while incoming kick takes over)
 - Use filter sweeps or echo-outs when tastes call for it
 - Power cuts only on clear phrase ends
+${
+  data.mode === "mashup"
+    ? "- For mashups prefer long blends and keep both tracks audible in the pocket"
+    : "- For remixes finish a clean handoff to deck B"
+}
 Never request copyrighted stems, never clone artist voices, never impersonate named singers. JSON only.`,
               },
               {
                 role: "user",
-                content: `Deck A: "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
+                content: `Mode: ${boothLabel}
+Deck A: "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
 Deck B: "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s
-DJ brief: ${data.prompt || "Club-ready remix transition — musical, phrase-aware, bass-clean."}
+DJ brief: ${data.prompt || "Club-ready transition — musical, phrase-aware, bass-clean."}
 
 Return JSON:
 {
@@ -218,22 +262,13 @@ Offsets must fit each track. mixInSec + crossfadeSec must fit remaining A.`,
         const parsed = MixPlanSchema.parse(
           extractJson(json.choices?.[0]?.message?.content ?? ""),
         );
-        const aMax = Math.max(0, data.durationA - 2);
-        const bMax = Math.max(0, data.durationB - 2);
-        const plan: MixPlan = {
-          ...parsed,
-          aOffsetSec: Math.min(parsed.aOffsetSec, aMax),
-          bOffsetSec: Math.min(parsed.bOffsetSec, bMax),
-          mixInSec: Math.min(
-            parsed.mixInSec,
-            Math.max(2, data.durationA - parsed.aOffsetSec - 2),
-          ),
-          crossfadeSec: Math.min(parsed.crossfadeSec, 32),
-        };
+        const plan = clampPlan(parsed, data);
+
         try {
           await chargeAfterMix(context.userId);
         } catch {
-          /* plan still usable; ledger may fail transiently */
+          // Do not give away a charged AI plan if the ledger write failed.
+          return { ok: true, plan: local, usedAi: false };
         }
         return { ok: true, plan, usedAi: true };
       } catch {

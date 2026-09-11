@@ -95,6 +95,7 @@ export async function countRemixesInRange(
   end: Date,
 ): Promise<number> {
   const sql = await getSql();
+  // Credit-paid mixes use mix_plan_credit so they don't burn free/weekly caps.
   const rows = await sql<{ total: number }>`
     select coalesce(count(*), 0)::int as total
     from usage_ledger
@@ -236,19 +237,21 @@ export async function recordUsage(opts: {
   const sql = await getSql();
   const preferCredit = opts.preferSongCredit !== false;
   if (preferCredit) {
-    const credits = await sql<{ id: string; remaining: number }>`
-      select id, remaining from song_credit
-      where user_id = ${opts.userId} and remaining > 0
-      order by created_at asc
-      limit 1
+    // Single-statement consume: concurrent callers can't both decrement the same row.
+    const consumed = await sql<{ id: string }>`
+      update song_credit
+      set remaining = remaining - 1
+      where id = (
+        select id from song_credit
+        where user_id = ${opts.userId} and remaining > 0
+        order by created_at asc
+        limit 1
+      )
+      and remaining > 0
+      returning id
     `;
-    const row = credits[0];
+    const row = consumed[0];
     if (row) {
-      await sql`
-        update song_credit
-        set remaining = remaining - 1
-        where id = ${row.id} and remaining > 0
-      `;
       if (opts.kind === "mix_plan" || opts.kind === "remix") {
         const week = currentWeekWindow();
         await sql`
@@ -257,7 +260,7 @@ export async function recordUsage(opts: {
           ) values (
             ${newId("use")},
             ${opts.userId},
-            ${"mix_plan"},
+            ${"mix_plan_credit"},
             ${0},
             ${opts.description},
             ${week.start},

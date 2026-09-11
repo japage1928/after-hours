@@ -48,7 +48,9 @@ export const generateSong = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => GenerateInputSchema.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true; song: Song } | { ok: false; error: string }> => {
-    const blocked = await assertAiAllowed(context.userId);
+    const blocked = await assertAiAllowed(context.userId, {
+      allowSongBundle: true,
+    });
     if (blocked) return { ok: false, error: blocked };
 
     const apiKey = process.env.XAI_API_KEY;
@@ -258,7 +260,9 @@ export const renderVocal = createServerFn({ method: "POST" })
       data,
       context,
     }): Promise<{ ok: true; audio: string; mime: string } | { ok: false; error: string }> => {
-      const blocked = await assertAiAllowed(context.userId);
+      const blocked = await assertAiAllowed(context.userId, {
+        allowSongBundle: true,
+      });
       if (blocked) return { ok: false, error: blocked };
 
       const apiKey = process.env.XAI_API_KEY;

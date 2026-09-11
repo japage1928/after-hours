@@ -41,7 +41,9 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   const dropMix = useBooth((s) => s.dropMix);
   const runLocalMix = useBooth((s) => s.runLocalMix);
   const playMash = useBooth((s) => s.playMash);
+  const pauseMix = useBooth((s) => s.pauseMix);
   const stopMix = useBooth((s) => s.stopMix);
+  const setMode = useBooth((s) => s.setMode);
   const syncB = useBooth((s) => s.syncB);
   const xfader = useBooth((s) => s.xfader);
   const setXfader = useBooth((s) => s.setXfader);
@@ -50,12 +52,17 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
   const timeA = useBooth((s) => s.timeA);
   const timeB = useBooth((s) => s.timeB);
   const needsUpgrade = useBooth((s) => s.needsUpgrade);
+  const usedAi = useBooth((s) => s.usedAi);
   const busy = status === "loading" || status === "planning";
   const ready = deckA.hasTrack && deckB.hasTrack;
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    setMode(mode);
+  }, [mode, setMode]);
 
   useEffect(() => {
     setPrompt(meta.defaultPrompt);
@@ -158,6 +165,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
               {TECHNIQUE_LABEL[plan.technique] ?? plan.technique}
               {plan.bassSwap ? " · bass swap" : ""}
               {` · ${Math.round(plan.targetBpm)} BPM`}
+              {usedAi === true ? " · AI" : usedAi === false ? " · local" : ""}
             </Badge>
           ) : null}
           <p className="text-sm text-muted">{statusText}</p>
@@ -203,7 +211,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
             aria-label={playing ? `Pause ${meta.label}` : `Play ${meta.label}`}
             disabled={!ready}
             onClick={() => {
-              if (playing) stopMix();
+              if (playing) pauseMix();
               else void playMash();
             }}
           >
