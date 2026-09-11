@@ -88,48 +88,50 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
   remix: {
     path: "/remix",
     label: "Remix",
-    eyebrow: "Remix booth",
+    eyebrow: "AI DJ remix",
     title: "Song → New beat",
     blurb:
-      "Keep the song, change the beat — load the original on A and a new beat bed on B, then hand the groove over.",
+      "Hand the decks to the AI DJ — it rides your song, teases the new beat, then drops a real remix move (bass swap, filter, power cut) onto the replacement groove.",
     slotA: "Song",
     slotB: "New beat",
     slotAHint: "The track you want remixed",
     slotBHint: "Replacement beat / instrumental",
     actionIdle: "Load song and new beat",
-    actionBusy: "Building the remix…",
-    actionReady: (a, b) => `Remix ${a} → ${b}`,
-    briefLabel: "Remix brief",
+    actionBusy: "AI DJ building the remix…",
+    actionReady: (a, b) => `AI DJ remix ${a} → ${b}`,
+    briefLabel: "Tell the AI DJ",
     briefPlaceholder:
-      "How should the new beat take over? Bass swap, filter wash, power cut…",
+      "How should the remix feel? Peak-time bass swap, filter wash, power cut…",
     defaultPrompt:
-      "Remix the song onto a new beat — phrase-match, then hand the groove cleanly to the new kick.",
+      "AI DJ remix — ride the song, tease the new kick, then drop a clean bass-swap onto the new beat.",
     presets: [
       {
         id: "bass_swap",
         label: "Bass swap",
         prompt:
-          "Bass swap onto the new beat — kill the old lows while the new kick takes over.",
+          "AI DJ: ride the song, tease the new kick, bass-swap the drop — new beat takes the floor.",
       },
       {
         id: "filter_blend",
         label: "Filter blend",
         prompt:
-          "Filter sweep the original out as the new beat bed lands, phrase-aware.",
+          "AI DJ: phrase-ride the original, filter-wash into the new beat bed.",
       },
       {
         id: "power_cut",
         label: "Power cut",
-        prompt: "Power cut — hard drop onto the new beat on the downbeat.",
+        prompt:
+          "AI DJ: build the intro, then power-cut onto the new beat on the downbeat.",
       },
       {
         id: "echo_out",
         label: "Echo out",
-        prompt: "Echo the original out as the new beat lands on the one.",
+        prompt:
+          "AI DJ: echo the original out as the new beat lands on the one.",
       },
     ],
     landingTitle: "Remix",
-    landingBlurb: "Same song. Brand-new beat.",
+    landingBlurb: "AI DJ changes the beat live.",
     footerJoin: (a, b) => `${a} → ${b}`,
   },
 };

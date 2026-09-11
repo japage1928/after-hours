@@ -92,6 +92,10 @@ async function runEnginePlan(
 ) {
   await djEngine.runPlan(plan, {
     booth: mode,
+    onCue: (text) => {
+      if (gen !== mixGeneration) return;
+      set({ statusText: text, cue: text });
+    },
     onComplete: () => {
       if (gen !== mixGeneration) return;
       set({
@@ -345,7 +349,9 @@ export const useBooth = create<BoothState>((set, get) => ({
         needsUpgrade: false,
         status: "mixing",
         statusText: usedAi
-          ? plan.cue
+          ? mode === "remix"
+            ? `AI DJ on the decks — ${plan.cue}`
+            : plan.cue
           : `${plan.cue} (local)`,
         error: get().error,
       });

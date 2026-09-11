@@ -172,7 +172,13 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
               {TECHNIQUE_LABEL[plan.technique] ?? plan.technique}
               {plan.bassSwap ? " · bass swap" : ""}
               {` · ${Math.round(plan.targetBpm)} BPM`}
-              {usedAi === true ? " · AI" : usedAi === false ? " · local" : ""}
+              {usedAi === true
+                ? mode === "remix"
+                  ? " · AI DJ"
+                  : " · AI"
+                : usedAi === false
+                  ? " · local"
+                  : ""}
             </Badge>
           ) : null}
           <p className="text-sm text-muted">{statusText}</p>

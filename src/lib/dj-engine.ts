@@ -17,6 +17,8 @@ export type DeckInfo = {
 export type RunPlanOptions = {
   /** Mashup keeps beats+lyrics blended; remix hands the song onto the new beat. */
   booth?: "mashup" | "remix";
+  /** Live DJ call as the performance advances. */
+  onCue?: (text: string) => void;
   onComplete?: () => void;
 };
 
@@ -353,6 +355,15 @@ export class DjEngine {
 
     const booth = opts.booth ?? "remix";
     const endXfader = booth === "mashup" ? 0.15 : 1;
+    const calls = plan.calls?.length
+      ? plan.calls
+      : [plan.cue || (booth === "mashup" ? "Locking the mash…" : "AI DJ taking the decks…")];
+    let callIdx = 0;
+    const say = (fallback: string) => {
+      const text = calls[callIdx] ?? fallback;
+      callIdx += 1;
+      opts.onCue?.(text);
+    };
 
     this.setXfader(-1);
     this.setFilter("a", 0);
@@ -363,10 +374,15 @@ export class DjEngine {
     this.setEq("b", "low", plan.bassSwap ? -1 : 0);
     this.setEq("b", "mid", 0);
     this.setEq("b", "high", 0);
+    // Incoming deck starts filtered so the tease feels like a real DJ cue.
+    this.setFilter("b", booth === "remix" ? 0.55 : 0.25);
 
     const rateA = this.decks.a.rate || 1;
-    // Plan times are in *track* seconds; convert mix-in to wall-clock for scheduling.
-    const mixInWall = Math.max(0.25, plan.mixInSec / rateA);
+    const introTrack = Math.max(0, plan.introSec || plan.mixInSec || 0);
+    const teaseTrack = Math.max(0, plan.teaseSec || 0);
+    // Track seconds → wall-clock for scheduling under rate.
+    const introWall = Math.max(0.2, introTrack / rateA);
+    const teaseWall = Math.max(0, teaseTrack / rateA);
     const fadeWall = Math.max(0.08, plan.crossfadeSec);
     const holdWall = Math.max(0, plan.holdSec);
 
@@ -381,42 +397,99 @@ export class DjEngine {
 
     const now = this.ctx.currentTime + 0.08;
     await this.playDeck("a", aOff, now);
-    await this.playDeck("b", bOff, now + mixInWall);
+    // Arm B when intro ends — then tease before the main drop.
+    await this.playDeck("b", bOff, now + introWall);
 
     const t0 = performance.now();
-    const mixInMs = mixInWall * 1000;
+    const introMs = introWall * 1000;
+    const teaseMs = teaseWall * 1000;
     const fadeMs = fadeWall * 1000;
     const holdMs = holdWall * 1000;
+    const dropStart = introMs + teaseMs;
+    const dropEnd = dropStart + fadeMs;
+    const totalMs = dropEnd + holdMs;
     const isCut = plan.style === "cut" || plan.technique === "power_cut";
-    const totalMs = mixInMs + fadeMs + holdMs;
+
+    let phase: "intro" | "tease" | "drop" | "ride" | "done" = "intro";
+    say(
+      booth === "mashup"
+        ? "Riding the beat bed…"
+        : "AI DJ riding the original…",
+    );
 
     const tick = () => {
       const t = performance.now() - t0;
-      if (t < mixInMs) {
+
+      if (t < introMs) {
+        // INTRO — solo A
         this.setXfader(-1);
         if (plan.bassSwap) {
           this.setEq("a", "low", 0);
           this.setEq("b", "low", -1);
         }
-      } else if (t < mixInMs + fadeMs) {
-        const u = Math.min(1, (t - mixInMs) / fadeMs);
+      } else if (t < dropStart) {
+        // TEASE — crack B in quietly; open its filter a bit
+        if (phase === "intro") {
+          phase = "tease";
+          say(
+            booth === "mashup"
+              ? "Bringing lyrics into the pocket…"
+              : "Teasing the new beat…",
+          );
+        }
+        const u = teaseMs <= 0 ? 1 : Math.min(1, (t - introMs) / teaseMs);
+        const teaseX = -1 + u * 0.35; // peek toward B without committing
+        this.setXfader(teaseX);
+        this.setFilter("b", Math.max(0, 0.55 - u * 0.45));
+        if (plan.bassSwap) {
+          this.setEq("b", "low", -1 + u * 0.35);
+        }
+        if (plan.technique === "echo_out" || plan.sweepA) {
+          this.setFilter("a", u * 0.15);
+        }
+      } else if (t < dropEnd) {
+        // DROP — main DJ move
+        if (phase === "intro" || phase === "tease") {
+          phase = "drop";
+          say(
+            isCut
+              ? "Power cut — new groove takes the floor."
+              : booth === "mashup"
+                ? "Locking the mash…"
+                : "Dropping the remix…",
+          );
+        }
+        const u = Math.min(1, (t - dropStart) / fadeMs);
         const shaped = isCut ? Math.min(1, u * 12) : u * u * (3 - 2 * u);
         const x = -1 + shaped * (1 + endXfader);
         this.setXfader(Math.min(endXfader, x));
+        this.setFilter("b", Math.max(0, 0.2 * (1 - shaped)));
+
         if (plan.sweepA || plan.technique === "filter_blend") {
           this.setFilter("a", shaped);
         }
         if (plan.technique === "echo_out") {
-          this.setFilter("a", Math.min(1, shaped * 1.2));
-          this.setEq("a", "high", shaped * 0.45);
-          this.setEq("a", "mid", -shaped * 0.25);
+          this.setFilter("a", Math.min(1, shaped * 1.25));
+          this.setEq("a", "high", shaped * 0.5);
+          this.setEq("a", "mid", -shaped * 0.3);
+          this.setEq("a", "low", -shaped * 0.85);
         }
         if (plan.bassSwap) {
           this.setEq("a", "low", -shaped);
           this.setEq("b", "low", -1 + shaped);
         }
       } else {
+        // RIDE
+        if (phase !== "ride" && phase !== "done") {
+          phase = "ride";
+          say(
+            booth === "mashup"
+              ? "Mash locked — both decks riding."
+              : "Riding the new beat.",
+          );
+        }
         this.setXfader(endXfader);
+        this.setFilter("b", 0);
         if (plan.sweepA || plan.technique === "echo_out") {
           this.setFilter("a", 1);
         }
@@ -424,15 +497,16 @@ export class DjEngine {
           this.setEq("a", "low", -1);
           this.setEq("b", "low", 0);
         }
-        // Mute outgoing deck after a full remix handoff to save CPU.
         if (booth === "remix" && this.decks.a.playing) {
           this.pauseDeck("a");
         }
       }
+
       if (t < totalMs) {
         this.mixTimer = window.requestAnimationFrame(tick);
         this.ensurePump();
       } else {
+        phase = "done";
         this.mixTimer = 0;
         opts.onComplete?.();
         this.ensurePump();

@@ -4,22 +4,24 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { assertAiAllowed, chargeAfterMix } from "@/lib/billing/gate";
 
 /**
- * Intelligent two-deck plan:
- * mashup = beat bed + lyrics/vocals riding together
- * remix  = original song handed onto a new beat
+ * AI DJ performance plan for two decks.
+ * Mashup = beat bed + lyrics riding together.
+ * Remix = AI DJ remixes the song onto a new beat (intro → tease → drop → ride).
  */
 export const MixPlanSchema = z.object({
   targetBpm: z.number().min(70).max(180),
   aOffsetSec: z.number().min(0).max(600),
   bOffsetSec: z.number().min(0).max(600),
+  /** Seconds riding deck A alone before the incoming deck is armed. */
+  introSec: z.number().min(0).max(90).default(0),
+  /** Seconds teasing the incoming deck before the main drop/blend. */
+  teaseSec: z.number().min(0).max(48).default(0),
+  /** Legacy: seconds after A starts before B enters. Prefer introSec. */
   mixInSec: z.number().min(0).max(180),
   crossfadeSec: z.number().min(0.5).max(40),
   holdSec: z.number().min(0).max(90),
-  /** Filter-sweep the outgoing deck during the blend. */
   sweepA: z.boolean(),
-  /** Classic DJ bass swap: kill lows on A while bringing lows on B. */
   bassSwap: z.boolean(),
-  /** hard cut vs long blend */
   style: z.enum(["blend", "cut", "echo_fade"]),
   technique: z.enum([
     "bass_swap",
@@ -28,7 +30,10 @@ export const MixPlanSchema = z.object({
     "long_blend",
     "echo_out",
   ]),
+  /** Headline cue for the whole performance. */
   cue: z.string().max(280),
+  /** Live DJ calls spoken as status during the performance (in order). */
+  calls: z.array(z.string().max(120)).max(6).default([]),
 });
 export type MixPlan = z.infer<typeof MixPlanSchema>;
 
@@ -62,10 +67,10 @@ function pickTechnique(
   const bpmGap = Math.abs(input.bpmA - input.bpmB);
   if (bpmGap > 12) return "filter_blend";
   if (input.bpmA >= 128 && input.bpmB >= 128) return "bass_swap";
-  return "long_blend";
+  return "bass_swap";
 }
 
-/** Bar-aligned local remix plan when the model is unavailable. */
+/** Bar-aligned local plan when the model is unavailable. */
 export function fallbackPlan(input: PlanMixInput): MixPlan {
   const technique = pickTechnique(input, input.prompt);
   const targetBpm = Math.round((input.bpmA + input.bpmB) / 2);
@@ -73,12 +78,18 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
   const barB = (60 / input.bpmB) * 4;
   const mashup = input.mode === "mashup";
 
-  // Enter after an 8–16 bar phrase on A; cue B near a likely drop (bar 8/16).
   const phraseBars = input.durationA > barA * 24 ? 16 : 8;
-  const mixInSec = nearestBar(
-    Math.min(input.durationA * 0.42, barA * phraseBars),
+  const introSec = nearestBar(
+    mashup
+      ? Math.min(input.durationA * 0.2, barA * 4)
+      : Math.min(input.durationA * 0.28, barA * phraseBars),
     input.bpmA,
   );
+  const teaseSec = nearestBar(
+    mashup ? Math.min(barA * 4, 16) : Math.min(barA * 4, 12),
+    input.bpmA,
+  );
+  const mixInSec = Math.max(barA * 2, introSec);
   const bOffsetSec = nearestBar(
     input.durationB > barB * 16 ? barB * 8 : barB * 4,
     input.bpmB,
@@ -102,23 +113,41 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
           ? Math.min(barA * 8, 24)
           : Math.min(barA * 4, 16);
 
+  const tech =
+    mashup && technique === "power_cut" ? "long_blend" : technique;
+
   const cues: Record<MixPlan["technique"], string> = {
     bass_swap: mashup
-      ? `Lock ${targetBpm}. Ride the beat under the lyrics — bass trade while vocals stay clear.`
-      : `Beat-match ${targetBpm}. Hand the song onto the new kick — bass swap over ${Math.round(crossfadeSec)}s.`,
+      ? `AI locks ${targetBpm} — beat under lyrics, bass trade, vocals clear.`
+      : `AI DJ remix @ ${targetBpm} — ride the song, tease the new kick, bass-swap the drop.`,
     filter_blend: mashup
-      ? `Wash the beat under the lyrics at ${targetBpm}, keep the vocal pocket open.`
-      : `Filter the original out as the new beat lands at ${targetBpm}.`,
+      ? `AI washes the beat under the lyrics at ${targetBpm}.`
+      : `AI DJ remix @ ${targetBpm} — filter the original out as the new beat lands.`,
     power_cut: mashup
-      ? `Phrase-match, then snap the lyrics onto the beat at ${targetBpm}.`
-      : `Phrase-match, then hard cut onto the new beat at ${targetBpm}.`,
+      ? `AI snaps lyrics onto the beat at ${targetBpm}.`
+      : `AI DJ remix @ ${targetBpm} — phrase ride, then power-cut onto the new beat.`,
     long_blend: mashup
-      ? `Long mash at ${targetBpm} — beats drive, lyrics ride on top.`
-      : `Long blend at ${targetBpm} — EQ out the old groove while the new beat takes the floor.`,
+      ? `AI mash at ${targetBpm} — beats drive, lyrics ride.`
+      : `AI DJ remix @ ${targetBpm} — long blend onto the new groove.`,
     echo_out: mashup
-      ? `Ghost the beat in, then lock lyrics over the groove at ${targetBpm}.`
-      : `Echo the original out as the new beat lands on the one at ${targetBpm}.`,
+      ? `AI ghosts the beat in under the lyrics at ${targetBpm}.`
+      : `AI DJ remix @ ${targetBpm} — echo the original out onto the new beat.`,
   };
+
+  const calls = mashup
+    ? [
+        "Riding the beat bed…",
+        "Bringing lyrics into the pocket…",
+        "Locking the mash — both decks up.",
+      ]
+    : [
+        "AI DJ riding the original…",
+        "Teasing the new beat…",
+        style === "cut"
+          ? "Power cut — new beat takes the floor."
+          : "Dropping the remix — handing the groove over.",
+        "Riding the new beat.",
+      ];
 
   const holdSec = mashup
     ? Math.min(barB * 16, Math.max(12, input.durationB - bOffsetSec - 1))
@@ -128,14 +157,17 @@ export function fallbackPlan(input: PlanMixInput): MixPlan {
     targetBpm,
     aOffsetSec: 0,
     bOffsetSec,
-    mixInSec: Math.max(barA * 4, mixInSec),
+    introSec,
+    teaseSec,
+    mixInSec,
     crossfadeSec,
     holdSec,
-    sweepA: technique === "filter_blend" || technique === "echo_out",
-    bassSwap: technique === "bass_swap" || technique === "long_blend",
+    sweepA: tech === "filter_blend" || tech === "echo_out",
+    bassSwap: tech === "bass_swap" || tech === "long_blend",
     style,
-    technique: mashup && technique === "power_cut" ? "long_blend" : technique,
-    cue: cues[mashup && technique === "power_cut" ? "long_blend" : technique],
+    technique: tech,
+    cue: cues[tech],
+    calls,
   };
 }
 
@@ -154,20 +186,39 @@ function clampPlan(parsed: MixPlan, data: PlanMixInput): MixPlan {
   const aOffsetSec = Math.min(Math.max(0, parsed.aOffsetSec), aMax);
   const bOffsetSec = Math.min(Math.max(0, parsed.bOffsetSec), bMax);
   const remainingA = Math.max(2, data.durationA - aOffsetSec - 2);
-  const mixInSec = Math.min(Math.max(0, parsed.mixInSec), remainingA);
+
+  let introSec = Math.min(Math.max(0, parsed.introSec ?? 0), remainingA * 0.7);
+  let teaseSec = Math.min(Math.max(0, parsed.teaseSec ?? 0), 40);
+  // Prefer explicit intro; fall back to legacy mixInSec as "B enters after".
+  const legacyMixIn = Math.min(Math.max(0, parsed.mixInSec), remainingA);
+  if (introSec < 0.05 && legacyMixIn > 0.05) {
+    introSec = Math.min(legacyMixIn, remainingA * 0.7);
+  }
+  if (introSec + teaseSec > remainingA - 1) {
+    teaseSec = Math.max(0, remainingA - introSec - 1);
+  }
+  const mixInSec = introSec; // B arms when intro ends
   const crossfadeSec = Math.min(
     Math.max(0.5, parsed.crossfadeSec),
-    Math.min(32, Math.max(0.5, remainingA - mixInSec + 4)),
+    Math.min(32, Math.max(0.5, remainingA - mixInSec - teaseSec + 4)),
   );
   const remainingB = Math.max(0, data.durationB - bOffsetSec - 0.5);
   const holdSec = Math.min(Math.max(0, parsed.holdSec), remainingB);
+  const calls = (parsed.calls ?? [])
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
   return {
     ...parsed,
     aOffsetSec,
     bOffsetSec,
+    introSec,
+    teaseSec,
     mixInSec,
     crossfadeSec,
     holdSec,
+    calls,
   };
 }
 
@@ -217,30 +268,29 @@ export const planMix = createServerFn({ method: "POST" })
           signal: AbortSignal.timeout(20000),
           body: JSON.stringify({
             model: "grok-4.5",
-            temperature: 0.35,
-            max_tokens: 500,
+            temperature: 0.4,
+            max_tokens: 700,
             reasoning_effort: "low",
             response_format: { type: "json_object" },
             messages: [
               {
                 role: "system",
-                content: `You are a working club DJ building a REAL two-deck ${boothLabel}.
-Product rules:
+                content: `You ARE the club DJ on two decks — not a planner writing notes. You perform a live ${boothLabel}.
+
+You control: beat-match BPM, cue points, intro ride, tease, drop technique, EQ bass swaps, filter sweeps, and the ride-out.
+
 ${
   data.mode === "mashup"
-    ? `- Mashup: Deck A is the BEAT BED / instrumental. Deck B is LYRICS / vocals.
-- Goal: lock the beat under the lyrics so both ride together — vocals clear, kick driving.
-- Prefer long blends and bass trades; avoid wiping the lyrics out.
-- Keep both decks audible in the pocket when the mash settles.`
-    : `- Remix: Deck A is the ORIGINAL SONG. Deck B is the NEW BEAT / replacement groove.
-- Goal: change the beat of the song — phrase-match, then hand the groove to the new kick.
-- Prefer bass swaps, filter blends, or a clean power cut onto the new beat.
-- Finish with a clean handoff to deck B (the new beat).`
+    ? `MASHUP rules:
+- Deck A = BEAT BED / instrumental. Deck B = LYRICS / vocals.
+- Perform: ride beats → bring lyrics in → lock both in the pocket.
+- Vocals stay clear; kick drives. Prefer long blends / bass trades.`
+    : `REMIX rules (AI DJ remixing):
+- Deck A = ORIGINAL SONG. Deck B = NEW BEAT.
+- Perform a real remix arc: INTRO (ride the song) → TEASE (hint the new beat) → DROP (bass swap / filter / power cut / echo out) → RIDE the new beat.
+- You are changing the beat of the song. Finish on deck B.`
 }
-Craft:
-- Beat-match to one target BPM
-- Align phrase boundaries (8/16/32 bars) for mix-in
-- Prefer bass swaps (EQ kill lows on outgoing while incoming kick takes over)
+
 Never request copyrighted stems, never clone artist voices, never impersonate named singers. JSON only.`,
               },
               {
@@ -248,23 +298,31 @@ Never request copyrighted stems, never clone artist voices, never impersonate na
                 content: `Mode: ${boothLabel}
 Deck A (${data.mode === "mashup" ? "beats" : "song"}): "${data.nameA}" ${data.bpmA} BPM, ${data.durationA.toFixed(1)}s
 Deck B (${data.mode === "mashup" ? "lyrics" : "new beat"}): "${data.nameB}" ${data.bpmB} BPM, ${data.durationB.toFixed(1)}s
-DJ brief: ${data.prompt || (data.mode === "mashup" ? "Lock beats under lyrics — musical, phrase-aware, vocal-clear." : "Hand the song onto a new beat — phrase-aware, bass-clean.")}
+DJ brief: ${
+                  data.prompt ||
+                  (data.mode === "mashup"
+                    ? "Lock beats under lyrics — musical, phrase-aware, vocal-clear."
+                    : "AI DJ remix — ride, tease, drop onto the new beat.")
+                }
 
-Return JSON:
+Return JSON for your live performance:
 {
   "targetBpm": number,
-  "aOffsetSec": seconds into A to start playback,
-  "bOffsetSec": seconds into B where the entry/drop lives,
-  "mixInSec": seconds after A starts before B enters (prefer 8/16 bar multiples),
-  "crossfadeSec": blend length (0.5-2 for cuts, 8-24 for blends),
-  "holdSec": seconds to ride after the handoff,
+  "aOffsetSec": where you start deck A,
+  "bOffsetSec": where the new entry/drop lives on B,
+  "introSec": seconds riding A alone (prefer 8/16 bar multiples),
+  "teaseSec": seconds teasing B before the main drop (0-16),
+  "mixInSec": same as introSec (B arms when intro ends),
+  "crossfadeSec": drop/blend length,
+  "holdSec": ride-out after the drop,
   "sweepA": boolean,
   "bassSwap": boolean,
   "style": "blend" | "cut" | "echo_fade",
   "technique": "bass_swap" | "filter_blend" | "power_cut" | "long_blend" | "echo_out",
-  "cue": "one short DJ cue describing the move"
+  "cue": "one headline describing your remix move",
+  "calls": ["4 short live DJ calls in performance order"]
 }
-Offsets must fit each track. mixInSec + crossfadeSec must fit remaining A.`,
+Offsets must fit each track. intro + tease + crossfade must fit remaining A.`,
               },
             ],
           }),
@@ -281,7 +339,6 @@ Offsets must fit each track. mixInSec + crossfadeSec must fit remaining A.`,
         try {
           await chargeAfterMix(context.userId);
         } catch {
-          // Do not give away a charged AI plan if the ledger write failed.
           return { ok: true, plan: local, usedAi: false };
         }
         return { ok: true, plan, usedAi: true };

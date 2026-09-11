@@ -17,7 +17,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "After Hours — mash beats with lyrics, or remix a song onto a new beat. Tracks you own.",
+          "After Hours — mash beats with lyrics, or let an AI DJ remix your song onto a new beat.",
       },
       { name: "theme-color", content: "#0c0c0b" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
