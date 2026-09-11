@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Library } from "lucide-react";
 import { Toaster } from "sonner";
 import { LibraryPanel } from "@/components/library-panel";
@@ -7,6 +8,9 @@ import { PlayerStage } from "@/components/player-stage";
 import { TransportBar } from "@/components/transport-bar";
 import { WritePanel } from "@/components/write-panel";
 import { Button } from "@/components/ui/button";
+import { isAdminEmail } from "@/lib/auth/admin";
+import { UserButton } from "@/lib/auth/gates";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { djEngine } from "@/lib/dj-engine";
 import { engine } from "@/lib/audio-engine";
 import { useBooth } from "@/lib/dj-store";
@@ -18,6 +22,7 @@ type Room = "mash" | "write";
 export function StudioApp() {
   const hydrate = useStudio((s) => s.hydrate);
   const libraryOpen = useStudio((s) => s.libraryOpen);
+  const user = useCurrentUser();
   const [room, setRoom] = useState<Room>("mash");
 
   useEffect(() => {
@@ -86,6 +91,18 @@ export function StudioApp() {
                 <span className="sm:hidden">Shelf</span>
               </Button>
             ) : null}
+            {user && isAdminEmail(user.primaryEmail) ? (
+              <Button asChild variant="secondary" className="h-11">
+                <Link to="/admin">Admin</Link>
+              </Button>
+            ) : null}
+            {user ? (
+              <UserButton />
+            ) : (
+              <Button asChild variant="secondary" className="h-11">
+                <Link to="/login">Sign in</Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>
