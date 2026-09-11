@@ -6,6 +6,7 @@ import {
 } from "@/lib/audio-file";
 import {
   aiBeatDeckName,
+  remixBpmForStyle,
   renderAiBeat,
   syntheticPeaks,
   type GrooveStyle,
@@ -137,7 +138,8 @@ async function ensureRemixBeat(
   if (deckB.hasTrack && !aiBeatActive) return true;
 
   await djEngine.ensure();
-  const bpm = Math.round(deckA.bpm || 120);
+  const songBpm = Math.round(deckA.bpm || 120);
+  const bpm = remixBpmForStyle(songBpm, grooveStyle);
   const proxy = {
     sampleRate: djEngine.sampleRate(),
     createBuffer: (ch: number, len: number, rate: number) =>
@@ -165,7 +167,7 @@ export const useBooth = create<BoothState>((set, get) => ({
   plan: null,
   usedAi: null,
   needsUpgrade: false,
-  grooveStyle: "house",
+  grooveStyle: "edm",
   aiBeatActive: false,
   xfader: -0.15,
   playing: false,

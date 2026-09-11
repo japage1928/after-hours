@@ -275,7 +275,7 @@ export const planMix = createServerFn({ method: "POST" })
             messages: [
               {
                 role: "system",
-                content: `You ARE the club DJ on two decks — not a planner writing notes. You perform a live ${boothLabel}.
+                content: `You ARE a genre remix producer on two decks — not a generic club DJ writing notes. You perform a live ${boothLabel}.
 
 You control: beat-match BPM, cue points, intro ride, tease, drop technique, EQ bass swaps, filter sweeps, and the ride-out.
 
@@ -285,10 +285,11 @@ ${
 - Deck A = BEAT BED / instrumental. Deck B = LYRICS / vocals.
 - Perform: ride beats → bring lyrics in → lock both in the pocket.
 - Vocals stay clear; kick drives. Prefer long blends / bass trades.`
-    : `REMIX rules (AI DJ remixing):
-- Deck A = ORIGINAL SONG. Deck B = NEW BEAT.
-- Perform a real remix arc: INTRO (ride the song) → TEASE (hint the new beat) → DROP (bass swap / filter / power cut / echo out) → RIDE the new beat.
-- You are changing the beat of the song. Finish on deck B.`
+    : `REMIX rules (genre AI remix):
+- Deck A = ORIGINAL SONG. Deck B = GENRE BEAT (EDM, dubstep, house, hip-hop, techno, rock, country, or breaks — read the beat name + brief).
+- Match the remix lane: EDM festival builds/claps, dubstep half-time drops, rock backbeats, country train-beat pockets, etc.
+- Perform: INTRO (ride the song) → TEASE (hint the genre beat) → DROP → RIDE the new beat.
+- Finish on deck B. Cue language should name the genre when clear.`
 }
 
 Never request copyrighted stems, never clone artist voices, never impersonate named singers. JSON only.`,
@@ -302,7 +303,7 @@ DJ brief: ${
                   data.prompt ||
                   (data.mode === "mashup"
                     ? "Lock beats under lyrics — musical, phrase-aware, vocal-clear."
-                    : "AI DJ remix — ride, tease, drop onto the new beat.")
+                    : "Genre remix — ride, tease, drop onto the new beat in that lane.")
                 }
 
 Return JSON for your live performance:

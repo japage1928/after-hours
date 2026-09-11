@@ -105,7 +105,7 @@ export function MashPanel({ mode }: { mode: BoothMode }) {
       {mode === "remix" ? (
         <section className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface p-4 shadow-border md:p-5">
           <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            AI DJ groove
+            Remix style
           </p>
           <div className="flex flex-wrap gap-1.5">
             {GROOVE_STYLES.map((g) => (

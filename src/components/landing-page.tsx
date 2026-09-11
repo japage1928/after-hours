@@ -57,7 +57,8 @@ export function LandingPage() {
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
               Late-night booth for tracks you own. Mash beats with lyrics — or
-              load one song and let the AI DJ remix it onto a new beat.
+              remix a song into EDM, dubstep, rock, country, and more with an AI
+              DJ.
             </p>
           </div>
 

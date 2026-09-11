@@ -33,7 +33,7 @@ export type BoothModeMeta = {
 /**
  * Product definitions:
  * - Mashup — beats of one song + lyrics/vocals of another
- * - Remix — keep a song, swap in a new beat
+ * - Remix — one song remixed into a genre lane (EDM, dubstep, rock, country, …)
  */
 export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
   mashup: {
@@ -91,47 +91,47 @@ export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
     eyebrow: "AI DJ remix",
     title: "You bring the song. AI DJ brings the beat.",
     blurb:
-      "Load one song. The AI DJ builds a groove, rides your track, teases the new kick, then drops a real remix move onto its own beat bed.",
+      "Load one song. Pick a remix lane — EDM, dubstep, rock, country, and more — and the AI DJ builds that groove, then drops a live remix onto it.",
     slotA: "Song",
     slotB: "AI beat",
     slotAHint: "The track you want remixed",
-    slotBHint: "Auto-built by the AI DJ (or upload your own)",
+    slotBHint: "Genre beat from the AI DJ (or upload your own)",
     actionIdle: "Load a song",
     actionBusy: "AI DJ remixing…",
     actionReady: (a, b) => `AI DJ remix ${a} → ${b}`,
     briefLabel: "Tell the AI DJ",
     briefPlaceholder:
-      "How should the remix feel? Peak-time bass swap, filter wash, power cut…",
+      "EDM festival drop, dubstep half-time, rock backbeat, country train beat…",
     defaultPrompt:
-      "AI DJ remix — ride my song, tease your kick, then bass-swap onto your new beat.",
+      "Remix this song in the selected genre lane — ride the original, tease the new groove, then drop clean.",
     presets: [
       {
-        id: "bass_swap",
-        label: "Bass swap",
+        id: "edm",
+        label: "EDM drop",
         prompt:
-          "AI DJ: ride the song, tease your kick, bass-swap the drop — your beat takes the floor.",
+          "EDM remix — ride the vocal, build tension, festival clap drop onto a big 4/4.",
       },
       {
-        id: "filter_blend",
-        label: "Filter blend",
+        id: "dubstep",
+        label: "Dubstep",
         prompt:
-          "AI DJ: phrase-ride the original, filter-wash into your beat bed.",
+          "Dubstep remix — half-time pocket, tease the snare, heavy drop onto the new beat.",
       },
       {
-        id: "power_cut",
-        label: "Power cut",
+        id: "rock",
+        label: "Rock",
         prompt:
-          "AI DJ: build the intro, then power-cut onto your beat on the downbeat.",
+          "Rock remix — keep the vocal up, drive a live backbeat, power into the chorus feel.",
       },
       {
-        id: "echo_out",
-        label: "Echo out",
+        id: "country",
+        label: "Country",
         prompt:
-          "AI DJ: echo the original out as your beat lands on the one.",
+          "Country remix — train-beat groove under the vocal, two-step pocket, clear story.",
       },
     ],
     landingTitle: "Remix",
-    landingBlurb: "AI DJ — one song in, remixed beat out.",
+    landingBlurb: "EDM, dubstep, rock, country — AI DJ remixes your song.",
     footerJoin: (a, b) => `${a} → ${b}`,
   },
 };
