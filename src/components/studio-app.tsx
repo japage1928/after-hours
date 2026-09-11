@@ -12,8 +12,8 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
   const meta = BOOTH_MODES[mode];
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-bg text-fg">
-      <header className="sticky top-0 z-20 border-b border-transparent bg-bg/90 backdrop-blur-sm">
+    <div className="relative min-h-dvh bg-bg text-fg">
+      <header className="sticky top-0 z-20 border-b border-transparent bg-bg">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 md:px-8 md:pt-[max(2rem,env(safe-area-inset-top))] md:pb-4">
           <div className="min-w-0">
             <Link

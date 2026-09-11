@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, Navigate } from "@tanstack/react-router";
 import {
   GROK_PROVIDERS,
@@ -11,6 +12,7 @@ import {
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
+import { ACCOUNT_PAGES } from "@/lib/account-nav";
 
 const subscribeToNothing = () => () => {};
 const noGateSessionOnServer = () => false;
@@ -99,17 +101,19 @@ export function SignInButtons() {
 }
 
 /**
- * Minimal signed-in identity chip + sign-out. Restyle freely (see the
- * `design-ui` skill). Sign-out is only shown when auth is enabled (the
- * disabled-auth dev user has nothing to sign out of) and the session is not
- * gate-materialized — behind the gate the next request signs the viewer
- * straight back in, so a sign-out control there is a broken loop.
+ * Signed-in identity chip + account menu. Menu is portaled to `document.body`
+ * with a solid background so sticky headers / page overlays can’t clip it or
+ * wash it out.
  */
 export function UserButton() {
   const user = useCurrentUser();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const gateSession = useSyncExternalStore(
     subscribeToNothing,
     hasGateSessionMarker,
@@ -118,16 +122,36 @@ export function UserButton() {
 
   useEffect(() => {
     if (!open) return;
+
+    const place = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuPos({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    place();
+
     const onPointer = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onPointer);
+
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    // Use click (not mousedown) so menu links receive the full click.
+    document.addEventListener("click", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      document.removeEventListener("click", onPointer);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -135,14 +159,63 @@ export function UserButton() {
   if (!user) return null;
   const label = user.displayName ?? user.primaryEmail ?? "Account";
 
+  const menu =
+    open && menuPos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ top: menuPos.top, right: menuPos.right }}
+            className="fixed z-[100] w-56 overflow-hidden rounded-xl border border-line bg-[#161614] py-1 text-fg shadow-[0_12px_40px_rgb(0_0_0_/_0.55)]"
+          >
+            <div className="border-b border-line bg-[#161614] px-3 py-2">
+              <p className="truncate text-sm font-medium text-fg">{label}</p>
+              {user.primaryEmail ? (
+                <p className="truncate text-xs text-muted">{user.primaryEmail}</p>
+              ) : null}
+            </div>
+            {ACCOUNT_PAGES.map((page) => (
+              <Link
+                key={page.path}
+                to={page.path}
+                role="menuitem"
+                className="block cursor-pointer bg-[#161614] px-3 py-2.5 text-sm text-fg hover:bg-[#1e1e1b]"
+                onClick={() => setOpen(false)}
+              >
+                {page.label}
+              </Link>
+            ))}
+            {authEnabled && !gateSession ? (
+              <button
+                type="button"
+                role="menuitem"
+                disabled={signingOut}
+                className="mt-1 block w-full cursor-pointer border-t border-line bg-[#161614] px-3 py-2.5 text-left text-sm text-fg hover:bg-[#1e1e1b] disabled:opacity-60"
+                onClick={() => {
+                  setSigningOut(true);
+                  void signOut("/login").catch(() => setSigningOut(false));
+                }}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-11 items-center gap-2 rounded-md bg-surface-2 px-2 shadow-border"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="relative z-[101] flex h-11 items-center gap-2 rounded-md bg-surface-2 px-2 shadow-border"
       >
         {user.profileImageUrl ? (
           <img
@@ -159,53 +232,7 @@ export function UserButton() {
           {label}
         </span>
       </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl bg-surface py-1 shadow-border"
-        >
-          <div className="border-b border-line px-3 py-2">
-            <p className="truncate text-sm font-medium text-fg">{label}</p>
-            {user.primaryEmail ? (
-              <p className="truncate text-xs text-muted">{user.primaryEmail}</p>
-            ) : null}
-          </div>
-          {(
-            [
-              ["settings", "Settings"],
-              ["projects", "Projects"],
-              ["profile", "Profile"],
-              ["account", "Account"],
-              ["billing", "Billing"],
-            ] as const
-          ).map(([tab, title]) => (
-            <Link
-              key={tab}
-              to="/settings"
-              search={{ tab }}
-              role="menuitem"
-              className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
-              onClick={() => setOpen(false)}
-            >
-              {title}
-            </Link>
-          ))}
-          {authEnabled && !gateSession ? (
-            <button
-              type="button"
-              role="menuitem"
-              disabled={signingOut}
-              className="mt-1 block w-full border-t border-line px-3 py-2 text-left text-sm text-fg hover:bg-surface-2 disabled:opacity-60"
-              onClick={() => {
-                setSigningOut(true);
-                void signOut("/login").catch(() => setSigningOut(false));
-              }}
-            >
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+      {menu}
+    </>
   );
 }

@@ -130,7 +130,7 @@ export async function createBillingPortalSession(user: {
   const stripe = getStripe();
   const portal = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${appOrigin()}/settings?tab=billing`,
+    return_url: `${appOrigin()}/billing`,
   });
   return { url: portal.url };
 }

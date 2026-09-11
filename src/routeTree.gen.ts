@@ -10,10 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as BillingRouteImport } from './routes/billing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MashupRouteImport } from './routes/mashup'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RemixRouteImport } from './routes/remix'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -24,9 +28,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingRoute = BillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -42,6 +56,16 @@ const MashupRoute = MashupRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RemixRoute = RemixRouteImport.update({
@@ -67,10 +91,14 @@ const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
+  '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -78,10 +106,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
+  '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -90,10 +122,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
+  '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -103,10 +139,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/admin'
+    | '/billing'
     | '/login'
     | '/mashup'
     | '/pricing'
+    | '/profile'
+    | '/projects'
     | '/remix'
     | '/settings'
     | '/api/auth/$'
@@ -114,10 +154,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/admin'
+    | '/billing'
     | '/login'
     | '/mashup'
     | '/pricing'
+    | '/profile'
+    | '/projects'
     | '/remix'
     | '/settings'
     | '/api/auth/$'
@@ -125,10 +169,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/admin'
+    | '/billing'
     | '/login'
     | '/mashup'
     | '/pricing'
+    | '/profile'
+    | '/projects'
     | '/remix'
     | '/settings'
     | '/api/auth/$'
@@ -137,10 +185,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
+  BillingRoute: typeof BillingRoute
   LoginRoute: typeof LoginRoute
   MashupRoute: typeof MashupRoute
   PricingRoute: typeof PricingRoute
+  ProfileRoute: typeof ProfileRoute
+  ProjectsRoute: typeof ProjectsRoute
   RemixRoute: typeof RemixRoute
   SettingsRoute: typeof SettingsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -156,11 +208,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing': {
+      id: '/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof BillingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -182,6 +248,20 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/remix': {
@@ -217,10 +297,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
+  BillingRoute: BillingRoute,
   LoginRoute: LoginRoute,
   MashupRoute: MashupRoute,
   PricingRoute: PricingRoute,
+  ProfileRoute: ProfileRoute,
+  ProjectsRoute: ProjectsRoute,
   RemixRoute: RemixRoute,
   SettingsRoute: SettingsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
