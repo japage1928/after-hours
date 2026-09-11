@@ -6,7 +6,7 @@ import {
   getAdminBootstrap,
   listAdminUsers,
   type AdminUserRow,
-} from "@/lib/auth/admin.server";
+} from "@/lib/auth/admin-api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/admin")({
