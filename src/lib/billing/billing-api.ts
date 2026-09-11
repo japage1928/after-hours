@@ -28,7 +28,7 @@ export const getBillingCatalog = createServerFn({ method: "GET" }).handler(
       stripeReady: stripeConfigured(),
       free: {
         name: "Free",
-        blurb: "1 AI remix or mashup per month. Booth stays open.",
+        blurb: `${FREE_REMIXES_PER_MONTH} AI generates or remixes per month. Mashup of owned tracks is included.`,
         remixesPerMonth: FREE_REMIXES_PER_MONTH,
         remixesPerWeek: null as number | null,
         priceLabel: "$0",

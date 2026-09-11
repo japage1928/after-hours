@@ -7,6 +7,10 @@ import {
   stripePriceIdForPlan,
   type PlanId,
 } from "@/lib/billing/plans";
+import {
+  checkoutCancelUrl,
+  checkoutSuccessUrl,
+} from "@/lib/checkout-return";
 import { appOrigin, getStripe } from "@/lib/billing/stripe";
 import {
   getActiveSubscription,
@@ -71,8 +75,8 @@ export async function createCheckoutSession(opts: {
     customer: customerId,
     client_reference_id: opts.user.id,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/pricing?checkout=cancel`,
+    success_url: checkoutSuccessUrl(origin),
+    cancel_url: checkoutCancelUrl(origin),
     metadata: {
       user_id: opts.user.id,
       plan_id: plan.id,

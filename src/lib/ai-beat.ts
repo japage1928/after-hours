@@ -11,6 +11,8 @@ export type GrooveStyle =
   | "techno"
   | "rock"
   | "country"
+  | "pop"
+  | "rnb"
   | "breaks";
 
 export const GROOVE_STYLES: {
@@ -27,6 +29,8 @@ export const GROOVE_STYLES: {
   { id: "techno", label: "Techno", blurb: "Hard pulse, offbeat hats", suggestedBpm: 132 },
   { id: "rock", label: "Rock", blurb: "Backbeat drums, live kit feel", suggestedBpm: 118 },
   { id: "country", label: "Country", blurb: "Train beat / two-step", suggestedBpm: 108 },
+  { id: "pop", label: "Pop", blurb: "Radio hook, bright drums", suggestedBpm: 102 },
+  { id: "rnb", label: "R&B", blurb: "Smooth pocket, warm bass", suggestedBpm: 88 },
   { id: "breaks", label: "Breaks", blurb: "Broken drums, swing", suggestedBpm: 130 },
 ];
 
@@ -198,6 +202,21 @@ function patternHits(
           if (s % 2 === 0) hat.push(base + s * (beat / 2));
           else hat.push(base + s * (beat / 2) + beat * 0.06);
         }
+        openHat.push(base + 3.5 * beat);
+        break;
+      }
+      case "pop": {
+        for (let b = 0; b < 4; b++) kick.push(base + b * beat);
+        clap.push(base + 1 * beat, base + 3 * beat);
+        for (let s = 0; s < 8; s++) hat.push(base + s * (beat / 2));
+        openHat.push(base + 3.5 * beat);
+        break;
+      }
+      case "rnb": {
+        kick.push(base, base + 2.5 * beat);
+        if (bar % 2 === 1) kick.push(base + 1.75 * beat);
+        snare.push(base + 1 * beat, base + 3 * beat);
+        for (let s = 0; s < 8; s++) hat.push(base + s * (beat / 2));
         openHat.push(base + 3.5 * beat);
         break;
       }

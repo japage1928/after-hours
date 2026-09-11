@@ -1,6 +1,6 @@
 export const ACCOUNT_PAGES = [
   { path: "/settings", label: "Settings" },
-  { path: "/projects", label: "Projects" },
+  { path: "/projects", label: "Library" },
   { path: "/profile", label: "Profile" },
   { path: "/account", label: "Account" },
   { path: "/billing", label: "Billing" },

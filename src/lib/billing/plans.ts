@@ -4,8 +4,8 @@
  * Internal AI cost budget is ~30% of subscription price. Caps are sized so
  * (remixesPerMonth × COST_PER_REMIX_CENTS) stays within that budget.
  *
- *   Free         $0      → 1 remix / calendar month
- *   Single mix   $2.99   → 1 mix credit (one-time)
+ *   Free         $0      → 2 generates/remixes / calendar month
+ *   One song     $2.99   → 1 generate/remix credit (one-time)
  *   Basic        $9.99   → 16 / month → 4 / week (resets each week)
  *   Plus        $19.99   → 32 / month → 8 / week
  *   Pro         $29.99   → 48 / month → 12 / week
@@ -36,14 +36,23 @@ export type Plan = {
 /** ~30%-of-revenue unit cost used to size remix caps. */
 export const COST_PER_REMIX_CENTS = 19;
 
-/** Signed-in users with no plan get this many AI remixes per calendar month. */
-export const FREE_REMIXES_PER_MONTH = 1;
+/** Signed-in users with no plan get this many AI generates/remixes per calendar month. */
+export const FREE_REMIXES_PER_MONTH = 2;
+
+/** Copy for landing, pricing, and the paywall that appears after quota is used. */
+export function freeTierIncludesCopy(): string {
+  return `Free includes ${FREE_REMIXES_PER_MONTH} AI generates or remixes per month`;
+}
+
+export function freeTierBlockedReason(): string {
+  return `Free tier includes ${FREE_REMIXES_PER_MONTH} AI generates or remixes per month. Buy a song credit or start a plan for weekly batches. Mashups of tracks you own don’t use this quota.`;
+}
 
 export const PLANS: Record<PlanId, Plan> = {
   song: {
     id: "song",
-    name: "Single mix",
-    blurb: "One AI mash or remix — pay as you go.",
+    name: "One song",
+    blurb: "One Generate or Remix credit — pay as you go. Mashup stays free.",
     priceCents: 299,
     kind: "one_time",
     usageBudgetCents: 0,
@@ -55,7 +64,7 @@ export const PLANS: Record<PlanId, Plan> = {
   basic: {
     id: "basic",
     name: "Basic",
-    blurb: "4 AI remixes each week (16 / month). Resets weekly.",
+    blurb: "4 Generate or Remix jobs each week (16 / month). Mashup unlimited.",
     priceCents: 999,
     kind: "subscription",
     usageBudgetCents: 300,
@@ -67,7 +76,7 @@ export const PLANS: Record<PlanId, Plan> = {
   plus: {
     id: "plus",
     name: "Plus",
-    blurb: "8 AI remixes each week (32 / month). Resets weekly.",
+    blurb: "8 Generate or Remix jobs each week (32 / month). Mashup unlimited.",
     priceCents: 1999,
     kind: "subscription",
     usageBudgetCents: 600,
@@ -79,7 +88,7 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    blurb: "12 AI remixes each week (48 / month). Resets weekly.",
+    blurb: "12 Generate or Remix jobs each week (48 / month). Mashup unlimited.",
     priceCents: 2999,
     kind: "subscription",
     usageBudgetCents: 900,

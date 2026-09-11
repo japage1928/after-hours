@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { getMyBilling } from "@/lib/billing/billing-api";
+import { FREE_REMIXES_PER_MONTH } from "@/lib/billing/plans";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { USAGE_CHANGED_EVENT } from "@/lib/usage-events";
 import { cn } from "@/lib/utils";
 
 type Entitlement = {
@@ -23,16 +25,22 @@ export function UsageMeter() {
   useEffect(() => {
     if (!user || user.isDevFallback) return;
     let cancelled = false;
-    void (async () => {
+    async function refresh() {
       try {
         const mine = await getMyBilling();
         if (!cancelled) setEntitlement(mine.entitlement);
       } catch {
         /* ignore */
       }
-    })();
+    }
+    void refresh();
+    const onBump = () => {
+      void refresh();
+    };
+    window.addEventListener(USAGE_CHANGED_EVENT, onBump);
     return () => {
       cancelled = true;
+      window.removeEventListener(USAGE_CHANGED_EVENT, onBump);
     };
   }, [user]);
 
@@ -40,7 +48,7 @@ export function UsageMeter() {
 
   const credits = entitlement?.songCredits ?? 0;
   const used = entitlement?.remixesUsed ?? 0;
-  const limit = entitlement?.remixesLimit ?? 1;
+  const limit = entitlement?.remixesLimit ?? FREE_REMIXES_PER_MONTH;
   const remaining = Math.max(0, limit - used);
   const ratio = limit > 0 ? Math.min(1, used / limit) : 0;
   const period =
@@ -53,8 +61,8 @@ export function UsageMeter() {
   return (
     <Link
       to="/pricing"
-      className="hidden items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted shadow-border transition-colors hover:text-fg sm:flex"
-      title="AI remix quota — upgrade for weekly batches"
+      className="flex items-center gap-2 rounded-md bg-surface-2 px-2 py-1.5 text-xs text-muted shadow-border transition-colors hover:text-fg sm:px-3 sm:py-2"
+      title="AI generate/remix quota — upgrade for weekly batches"
     >
       <span className="relative grid size-8 place-items-center" aria-hidden>
         <svg viewBox="0 0 36 36" className="size-8 -rotate-90">
@@ -85,9 +93,9 @@ export function UsageMeter() {
         {credits > 0 ? (
           <>
             <span className="block font-medium text-fg">
-              {credits} mix credit{credits === 1 ? "" : "s"}
+              {credits} song credit{credits === 1 ? "" : "s"}
             </span>
-            <span className="text-subtle">Ready to mix</span>
+            <span className="text-subtle">Ready to generate</span>
           </>
         ) : entitlement?.ok ? (
           <>
@@ -95,7 +103,7 @@ export function UsageMeter() {
               {remaining} left {period}
             </span>
             <span className="text-subtle">
-              of {limit} AI remix{limit === 1 ? "" : "es"}
+              of {limit} AI job{limit === 1 ? "" : "s"}
             </span>
           </>
         ) : (

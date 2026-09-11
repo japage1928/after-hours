@@ -64,7 +64,7 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
   async function buy(planId: CatalogPlan["id"]) {
     setError(null);
     if (!user || user.isDevFallback) {
-      window.location.assign("/login?next=/pricing");
+      window.location.assign(paywall ? "/login?next=/generate" : "/login?next=/pricing");
       return;
     }
     setBusy(planId);
@@ -80,11 +80,26 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       {paywall ? (
-        <div className="rounded-2xl border border-rec/35 bg-rec/10 px-4 py-3">
-          <p className="font-display text-2xl text-fg">Unlock more AI remixes</p>
-          <p className="mt-1 text-sm text-muted">
-            Free includes 1 AI remix per month. Paid plans unlock weekly batches
-            that reset every week. Cancel anytime from Billing.
+        <div className="flex flex-col gap-3 rounded-2xl border border-rec/35 bg-rec/10 px-4 py-3">
+          <div>
+            <p className="font-display text-2xl text-fg">Keep generating</p>
+            <p className="mt-1 text-sm text-muted">
+              Your free AI songs for this month are used. Basic unlocks 4 Generate
+              or Remix jobs every week. Mashup of tracks you own stays free.
+            </p>
+          </div>
+          <Button
+            size="lg"
+            className="h-12 w-full"
+            disabled={Boolean(busy) || !stripeReady}
+            onClick={() => void buy("basic")}
+          >
+            {busy === "basic"
+              ? "Redirecting…"
+              : "Continue with Basic — $9.99/mo"}
+          </Button>
+          <p className="text-xs text-subtle">
+            Or pick a one-song credit ($2.99) or a bigger weekly batch below.
           </p>
         </div>
       ) : null}
@@ -96,7 +111,7 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
       ) : null}
 
       {entitled && !paywall ? (
-        <p className="text-sm text-muted">You still have remix quota left.</p>
+        <p className="text-sm text-muted">You still have AI generate/remix quota left.</p>
       ) : null}
 
       {error ? <p className="text-sm text-rec">{error}</p> : null}
@@ -107,7 +122,7 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
           compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-5",
         )}
       >
-        {free ? (
+        {free && !paywall ? (
           <article className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border">
             <div>
               <h3 className="font-display text-2xl text-fg">{free.name}</h3>
@@ -115,10 +130,10 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
             </div>
             <p className="font-display text-3xl text-fg">{free.priceLabel}</p>
             <p className="text-xs text-subtle">
-              {free.remixesPerMonth} AI remix / month
+              {free.remixesPerMonth} AI generate or remix / month
             </p>
             <Button asChild variant="secondary" className="mt-auto w-full">
-              <Link to={user ? "/mashup" : "/login"} search={user ? undefined : { next: "/mashup" }}>
+              <Link to={user ? "/generate" : "/login"} search={user ? undefined : { next: "/generate" }}>
                 Open booth
               </Link>
             </Button>
@@ -128,7 +143,10 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
         {plans.map((plan) => (
           <article
             key={plan.id}
-            className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border"
+            className={cn(
+              "flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border",
+              paywall && plan.id === "basic" && "ring-2 ring-accent",
+            )}
           >
             <div>
               <h3 className="font-display text-2xl text-fg">{plan.name}</h3>
@@ -143,7 +161,7 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
             <p className="text-xs text-subtle">
               {plan.remixesPerWeek
                 ? `${plan.remixesPerWeek} / week · ${plan.remixesPerMonth} / month`
-                : `${plan.songCredits} mix credit`}
+                : `${plan.songCredits} song credit`}
             </p>
             <Button
               className="mt-auto w-full"
@@ -153,8 +171,10 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
               {busy === plan.id
                 ? "Redirecting…"
                 : plan.kind === "subscription"
-                  ? "Start plan"
-                  : "Buy credit"}
+                  ? plan.id === "basic" && paywall
+                    ? "Continue with Basic"
+                    : "Start plan"
+                  : "Buy song credit"}
             </Button>
           </article>
         ))}

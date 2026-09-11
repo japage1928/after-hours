@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { NeedHelpLink } from "@/components/need-help-link";
 import { isAdminEmail } from "@/lib/auth/admin";
 import {
   authClient,
@@ -166,13 +167,14 @@ function LoginPage() {
       <div className="relative mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-2 md:px-8 lg:gap-16">
         <div className="order-2 md:order-1">
           <p className="text-xs font-medium tracking-[0.2em] text-muted uppercase">
-            Remix booth
+            Creator booth
           </p>
           <h1 className="font-display mt-3 text-5xl leading-[0.95] tracking-tight text-fg sm:text-6xl md:text-7xl">
             After Hours
           </h1>
           <p className="mt-4 max-w-md text-base text-muted sm:text-lg">
-            Mashup or remix — load two tracks you own and open the booth.
+            Sign up, then generate an AI song in this visit — play and download
+            before you leave.
           </p>
         </div>
 
@@ -186,7 +188,7 @@ function LoginPage() {
                 {mode === "signup" ? "Create account" : "Welcome back"}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Free booth — pick mashup or remix after you sign in.
+                Two AI generates this month. You’ll open the Generate booth next.
               </p>
             </div>
             {mode === "signup" ? (
@@ -296,6 +298,9 @@ function LoginPage() {
               </div>
             ) : null}
           </form>
+          <p className="mt-3 px-1">
+            <NeedHelpLink />
+          </p>
         </div>
       </div>
     </div>

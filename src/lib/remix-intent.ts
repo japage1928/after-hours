@@ -16,6 +16,7 @@ import {
   qaBriefFit,
 } from "@/lib/ace-step-qa";
 import { GROOVE_STYLES, type GrooveStyle } from "@/lib/ai-beat";
+import { fallbackAceStepJob, remixBedDurationSec } from "@/lib/remix-job";
 
 /**
  * Plain English remix brief → ACE-Step production prompt.
@@ -36,31 +37,6 @@ export type RemixIntentInput = z.infer<typeof IntentInputSchema>;
 
 function genreMeta(id: GrooveStyle) {
   return GROOVE_STYLES.find((g) => g.id === id) ?? GROOVE_STYLES[0]!;
-}
-
-/** Local fallback when the LLM is unavailable — still ACE-Step-shaped. */
-export function fallbackAceStepJob(input: RemixIntentInput): AceStepJob {
-  const g = genreMeta(input.genre as GrooveStyle);
-  const bpm = Math.round(input.songBpm * 0.55 + g.suggestedBpm * 0.45);
-  const caption = [
-    `${g.label} remix instrumental`,
-    input.brief.trim() || `rework of "${input.songName}"`,
-    g.blurb,
-    "modern production, punchy drums, clear low end, original composition only",
-  ].join(", ");
-
-  return AceStepJobSchema.parse({
-    caption,
-    lyrics: "[Instrumental]",
-    bpm: Math.max(70, Math.min(180, bpm)),
-    durationSec: Math.min(
-      90,
-      Math.max(32, Math.round(Math.min(input.songDurationSec * 0.45, 72))),
-    ),
-    vocalLanguage: "en",
-    instrumental: true,
-    summary: `${g.label} remix bed for ${input.songName}`,
-  });
 }
 
 function extractJson(text: string): unknown {
@@ -177,15 +153,13 @@ Return JSON:
           extractJson(json.choices?.[0]?.message?.content ?? ""),
         );
 
-        try {
-          await chargeAfterMix(context.userId);
-        } catch {
-          return { ok: true, job: local, usedAi: false, aceStepReady: ready };
-        }
-
         return {
           ok: true,
-          job: parsed,
+          job: {
+            ...parsed,
+            durationSec: remixBedDurationSec(data.songDurationSec),
+            instrumental: true,
+          },
           usedAi: true,
           aceStepReady: ready,
         };
@@ -212,6 +186,7 @@ export const runAceStepJob = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
+      context,
     }): Promise<
       | {
           ok: true;
@@ -308,7 +283,21 @@ export const runAceStepJob = createServerFn({ method: "POST" })
       };
 
       const first = await attempt(data.job, false);
-      if (first.ok) return first;
+      if (first.ok) {
+        try {
+          await chargeAfterMix(context.userId);
+        } catch (err) {
+          return {
+            ok: false,
+            error:
+              err instanceof Error
+                ? err.message
+                : "Could not record usage for this generation.",
+            qa: { passed: false, reasons: ["billing"], regenerated: false },
+          };
+        }
+        return first;
+      }
 
       // One regenerate with a tightened caption.
       const second = await attempt(
@@ -322,7 +311,21 @@ export const runAceStepJob = createServerFn({ method: "POST" })
         },
         true,
       );
-      if (second.ok) return second;
+      if (second.ok) {
+        try {
+          await chargeAfterMix(context.userId);
+        } catch (err) {
+          return {
+            ok: false,
+            error:
+              err instanceof Error
+                ? err.message
+                : "Could not record usage for this generation.",
+            qa: { passed: false, reasons: ["billing"], regenerated: true },
+          };
+        }
+        return second;
+      }
 
       return {
         ok: false,

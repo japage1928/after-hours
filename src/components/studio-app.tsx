@@ -1,16 +1,41 @@
+import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Toaster } from "sonner";
-import { MashPanel } from "@/components/mash-panel";
+import { Toaster, toast } from "sonner";
+import { StudioPanel } from "@/components/studio-panel";
 import { UsageMeter } from "@/components/usage-meter";
+import { NeedHelpLink } from "@/components/need-help-link";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
+import {
+  BOOTH_MODE_ORDER,
+  BOOTH_MODES,
+  type BoothMode,
+} from "@/lib/booth-mode";
+import { consumeCheckoutSuccessLocation } from "@/lib/checkout-return";
+import { bumpUsageMeter } from "@/lib/usage-events";
+import { cn } from "@/lib/utils";
 
 export function StudioApp({ mode }: { mode: BoothMode }) {
   const user = useCurrentUser();
   const meta = BOOTH_MODES[mode];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cleaned = consumeCheckoutSuccessLocation(
+      window.location.pathname,
+      window.location.search,
+    );
+    if (!cleaned) return;
+    toast.success("You're in. Generate is unlocked.");
+    bumpUsageMeter();
+    const ticks = [800, 2500, 6000].map((ms) =>
+      window.setTimeout(() => bumpUsageMeter(), ms),
+    );
+    window.history.replaceState({}, "", cleaned);
+    return () => ticks.forEach((id) => window.clearTimeout(id));
+  }, []);
 
   return (
     <div className="relative min-h-dvh bg-bg text-fg">
@@ -38,8 +63,12 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
           <div className="flex shrink-0 items-center gap-2">
             <UsageMeter />
             <Button asChild variant="secondary" className="h-11">
+              <Link to="/projects">Library</Link>
+            </Button>
+            <Button asChild variant="secondary" className="h-11">
               <Link to="/pricing">Plans</Link>
             </Button>
+            <NeedHelpLink className="hidden px-2 sm:inline" />
             <Button asChild variant="secondary" className="h-11">
               <Link to="/">Home</Link>
             </Button>
@@ -51,13 +80,32 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
             <UserButton />
           </div>
         </div>
+        <nav
+          aria-label="Studio modes"
+          className="mx-auto flex max-w-7xl gap-1 px-4 pb-3 md:px-8"
+        >
+          {BOOTH_MODE_ORDER.map((id) => {
+            const item = BOOTH_MODES[id];
+            const on = id === mode;
+            return (
+              <Link
+                key={id}
+                to={item.path}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm transition-colors",
+                  on
+                    ? "bg-accent text-accent-fg"
+                    : "bg-surface-2 text-muted hover:text-fg",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </header>
 
-      <p className="relative mx-auto max-w-7xl px-4 pb-3 text-sm text-muted md:px-8 md:pb-4">
-        {meta.blurb}
-      </p>
-
-      <MashPanel mode={mode} />
+      <StudioPanel mode={mode} />
 
       <Toaster
         theme="dark"

@@ -1,16 +1,24 @@
+import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
-import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
+import { BOOTH_MODE_ORDER, BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { PlansGrid } from "@/components/plans-grid";
+import { NeedHelpLink } from "@/components/need-help-link";
+import { isCheckoutSuccessSearch } from "@/lib/checkout-return";
 import { cn } from "@/lib/utils";
 
 export function LandingPage() {
   const user = useCurrentUser();
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isCheckoutSuccessSearch(window.location.search)) return;
+    window.location.replace(`/generate${window.location.search}`);
+  }, []);
+
   return (
     <div className="relative bg-bg text-fg">
-      {/* Full-bleed hero */}
       <section className="relative min-h-dvh overflow-hidden">
         <img
           src="/after-hours-hero.jpg"
@@ -37,11 +45,13 @@ export function LandingPage() {
             >
               Plans
             </Link>
+            <NeedHelpLink className="rounded-md bg-surface-2/90 px-3 py-2 text-sm no-underline hover:bg-surface" muted={false} />
             {user ? (
               <UserButton />
             ) : (
               <Link
                 to="/login"
+                search={{ next: "/generate" }}
                 className="rounded-md bg-surface-2/90 px-3 py-2 text-sm text-fg shadow-border backdrop-blur-sm transition-colors hover:bg-surface"
               >
                 Sign in
@@ -56,14 +66,21 @@ export function LandingPage() {
               After Hours
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
-              Late-night booth for tracks you own. Mash beats with lyrics — or
-              remix a song into EDM, dubstep, rock, country, and more with an AI
-              DJ.
+              Generate an AI song in the browser — prompt, play, download.
+              AI generation powered by ACE-Step (via Replicate). Two songs free
+              this month.
             </p>
+            <Link
+              to={user ? "/generate" : "/login"}
+              search={user ? undefined : { next: "/generate" }}
+              className="mt-6 inline-flex h-12 items-center rounded-md bg-accent px-5 text-base font-medium text-accent-fg shadow-border transition-[transform,background-color] hover:brightness-110 active:scale-[0.98]"
+            >
+              Generate a song →
+            </Link>
           </div>
 
-          <div className="landing-rise-delay flex max-w-xl flex-col gap-3 sm:flex-row sm:gap-4">
-            {(Object.keys(BOOTH_MODES) as BoothMode[]).map((mode) => {
+          <div className="landing-rise-delay grid max-w-4xl gap-3 sm:grid-cols-3 sm:gap-4">
+            {BOOTH_MODE_ORDER.map((mode) => {
               const meta = BOOTH_MODES[mode];
               return (
                 <ModeChoice
@@ -80,7 +97,6 @@ export function LandingPage() {
         </main>
       </section>
 
-      {/* Plans — below the first viewport */}
       <section
         id="plans"
         className="relative border-t border-line/60 bg-bg px-4 py-16 md:px-8 md:py-24"
@@ -90,12 +106,13 @@ export function LandingPage() {
             Plans
           </p>
           <h2 className="font-display mt-3 text-4xl text-fg md:text-5xl">
-            Free to start. Weekly batches when you go further.
+            Two AI songs free. Weekly batches when you go further.
           </h2>
           <p className="mt-3 max-w-xl text-sm text-muted sm:text-base">
-            Every account gets 1 AI remix per month. Paid plans unlock weekly
-            remix batches that reset every week — sized so AI cost stays near 30%
-            of what you pay.
+            Every account gets 2 AI generates or remixes per month — enough to
+            finish a real track on visit one. Paid plans unlock weekly batches
+            that reset every week. Mashup of two owned tracks is included — it
+            runs on your device.
           </p>
           <div className="mt-10">
             <PlansGrid />
@@ -117,7 +134,7 @@ function ModeChoice({
   signedIn: boolean;
   title: string;
   blurb: string;
-  path: "/mashup" | "/remix";
+  path: "/generate" | "/mashup" | "/remix";
 }) {
   const className = cn(
     "group flex min-h-[8.5rem] flex-1 flex-col justify-end rounded-2xl bg-bg/55 p-5 shadow-border backdrop-blur-md transition-[transform,background-color] duration-200",

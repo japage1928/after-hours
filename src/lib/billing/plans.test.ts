@@ -5,6 +5,8 @@ import {
   FREE_REMIXES_PER_MONTH,
   PLANS,
   formatUsd,
+  freeTierBlockedReason,
+  freeTierIncludesCopy,
   planById,
   remixCapWithinBudget,
   stripePriceIdForPlan,
@@ -21,7 +23,10 @@ describe("pricing catalog", () => {
     assert.equal(PLANS.plus.usageBudgetCents, 600);
     assert.equal(PLANS.pro.usageBudgetCents, 900);
     assert.equal(PLANS.song.songCredits, 1);
-    assert.equal(FREE_REMIXES_PER_MONTH, 1);
+    assert.equal(PLANS.song.name, "One song");
+    assert.equal(FREE_REMIXES_PER_MONTH, 2);
+    assert.match(freeTierIncludesCopy(), /2 AI generates or remixes/);
+    assert.match(freeTierBlockedReason(), /Mashups of tracks you own/);
     assert.equal(PLANS.basic.remixesPerWeek, 4);
     assert.equal(PLANS.basic.remixesPerMonth, 16);
     assert.equal(PLANS.plus.remixesPerWeek, 8);

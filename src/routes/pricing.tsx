@@ -5,6 +5,7 @@ import { PlansGrid } from "@/components/plans-grid";
 import { startBillingPortal } from "@/lib/billing/billing-api";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
+import { NeedHelpLink } from "@/components/need-help-link";
 
 export const Route = createFileRoute("/pricing")({
   component: PricingPage,
@@ -30,6 +31,10 @@ function PricingPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      window.location.replace(`/generate${window.location.search}`);
+      return;
+    }
     if (params.get("checkout") === "cancel") {
       setError("Checkout canceled — pick a plan whenever you’re ready.");
     }
@@ -44,12 +49,15 @@ function PricingPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Plans</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Free includes 1 AI remix per month. Basic / Plus / Pro unlock weekly
-            batches (4 / 8 / 12) that reset every week. Cancel anytime from
-            Billing.
+            Generate a song from a prompt, remix a track you own onto a new beat,
+            or mash beats × lyrics on-device. Free includes 2 AI Generate or Remix
+            jobs per month. Basic / Plus / Pro unlock weekly batches (4 / 8 / 12)
+            that reset every week. Mashup never spends AI quota. Cancel anytime
+            from Billing.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <NeedHelpLink />
           <Button asChild variant="secondary">
             <Link to="/">Home</Link>
           </Button>
@@ -68,7 +76,7 @@ function PricingPage() {
 
       {error ? <p className="text-sm text-rec">{error}</p> : null}
 
-      <PlansGrid paywall />
+      <PlansGrid />
     </div>
   );
 }
