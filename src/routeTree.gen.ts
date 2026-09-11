@@ -14,6 +14,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GenerateRouteImport } from './routes/generate'
 import { Route as MashupRouteImport } from './routes/mashup'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -46,6 +47,11 @@ const BillingRoute = BillingRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GenerateRoute = GenerateRouteImport.update({
+  id: '/generate',
+  path: '/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MashupRoute = MashupRouteImport.update({
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
+  '/generate': typeof GenerateRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
+  '/generate': typeof GenerateRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
   '/login': typeof LoginRoute
+  '/generate': typeof GenerateRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/billing'
     | '/login'
+    | '/generate'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/billing'
     | '/login'
+    | '/generate'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/billing'
     | '/login'
+    | '/generate'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   BillingRoute: typeof BillingRoute
   LoginRoute: typeof LoginRoute
+  GenerateRoute: typeof GenerateRoute
   MashupRoute: typeof MashupRoute
   PricingRoute: typeof PricingRoute
   ProfileRoute: typeof ProfileRoute
@@ -234,6 +247,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/generate': {
+      id: '/generate'
+      path: '/generate'
+      fullPath: '/generate'
+      preLoaderRoute: typeof GenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mashup': {
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   BillingRoute: BillingRoute,
   LoginRoute: LoginRoute,
+  GenerateRoute: GenerateRoute,
   MashupRoute: MashupRoute,
   PricingRoute: PricingRoute,
   ProfileRoute: ProfileRoute,

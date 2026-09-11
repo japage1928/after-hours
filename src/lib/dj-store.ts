@@ -22,7 +22,8 @@ import { detectBpm } from "@/lib/bpm";
 import { fallbackPlan, planMix, type MixPlan } from "@/lib/dj-api";
 import { djEngine, type DeckId, type DeckInfo } from "@/lib/dj-engine";
 import { engine as studioEngine } from "@/lib/audio-engine";
-import type { BoothMode } from "@/lib/booth-mode";
+
+type MixBooth = "mashup" | "remix";
 
 const MAX_BYTES = 40 * 1024 * 1024;
 
@@ -30,7 +31,7 @@ export type BoothStatus = "idle" | "loading" | "planning" | "mixing" | "error";
 
 type BoothState = {
   ready: boolean;
-  mode: BoothMode;
+  mode: MixBooth;
   status: BoothStatus;
   statusText: string;
   error: string | null;
@@ -56,7 +57,7 @@ type BoothState = {
   eqA: { low: number; mid: number; high: number };
   eqB: { low: number; mid: number; high: number };
   hydrate: () => Promise<void>;
-  setMode: (mode: BoothMode) => void;
+  setMode: (mode: MixBooth) => void;
   setPrompt: (v: string) => void;
   setGrooveStyle: (style: GrooveStyle) => Promise<void>;
   armAiBeat: () => Promise<void>;
@@ -105,7 +106,7 @@ function snapshot(): Pick<
 
 async function runEnginePlan(
   plan: MixPlan,
-  mode: BoothMode,
+  mode: MixBooth,
   gen: number,
   set: (partial: Partial<BoothState>) => void,
 ) {

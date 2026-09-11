@@ -54,7 +54,7 @@ export function UsageMeter() {
     <Link
       to="/pricing"
       className="hidden items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted shadow-border transition-colors hover:text-fg sm:flex"
-      title="AI remix quota — upgrade for weekly batches"
+      title="AI generate/remix quota — upgrade for weekly batches"
     >
       <span className="relative grid size-8 place-items-center" aria-hidden>
         <svg viewBox="0 0 36 36" className="size-8 -rotate-90">
@@ -95,7 +95,7 @@ export function UsageMeter() {
               {remaining} left {period}
             </span>
             <span className="text-subtle">
-              of {limit} AI remix{limit === 1 ? "" : "es"}
+              of {limit} AI job{limit === 1 ? "" : "s"}
             </span>
           </>
         ) : (

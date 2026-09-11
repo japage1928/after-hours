@@ -44,9 +44,9 @@ function PricingPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Plans</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Free includes 1 AI remix per month. Basic / Plus / Pro unlock weekly
-            batches (4 / 8 / 12) that reset every week. Cancel anytime from
-            Billing.
+            Free includes 1 AI generate or remix per month. Basic / Plus / Pro unlock weekly
+            batches (4 / 8 / 12) that reset every week. Mashup of two owned tracks
+            runs on your device. Cancel anytime from Billing.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

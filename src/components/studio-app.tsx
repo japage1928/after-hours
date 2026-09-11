@@ -1,12 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import { Toaster } from "sonner";
-import { MashPanel } from "@/components/mash-panel";
+import { StudioPanel } from "@/components/studio-panel";
 import { UsageMeter } from "@/components/usage-meter";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
+import {
+  BOOTH_MODE_ORDER,
+  BOOTH_MODES,
+  type BoothMode,
+} from "@/lib/booth-mode";
+import { cn } from "@/lib/utils";
 
 export function StudioApp({ mode }: { mode: BoothMode }) {
   const user = useCurrentUser();
@@ -51,13 +56,32 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
             <UserButton />
           </div>
         </div>
+        <nav
+          aria-label="Studio modes"
+          className="mx-auto flex max-w-7xl gap-1 px-4 pb-3 md:px-8"
+        >
+          {BOOTH_MODE_ORDER.map((id) => {
+            const item = BOOTH_MODES[id];
+            const on = id === mode;
+            return (
+              <Link
+                key={id}
+                to={item.path}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm transition-colors",
+                  on
+                    ? "bg-accent text-accent-fg"
+                    : "bg-surface-2 text-muted hover:text-fg",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </header>
 
-      <p className="relative mx-auto max-w-7xl px-4 pb-3 text-sm text-muted md:px-8 md:pb-4">
-        {meta.blurb}
-      </p>
-
-      <MashPanel mode={mode} />
+      <StudioPanel mode={mode} />
 
       <Toaster
         theme="dark"

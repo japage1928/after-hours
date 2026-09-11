@@ -584,7 +584,7 @@ export function BillingPanel() {
             {sub?.priceLabel ? <span> · {sub.priceLabel}/mo</span> : null}
           </p>
           <p>
-            AI remixes{" "}
+            AI generate / remix{" "}
             {ent.remixPeriod === "week"
               ? "this week"
               : ent.remixPeriod === "month"

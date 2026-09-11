@@ -1,4 +1,4 @@
-export type BoothMode = "mashup" | "remix";
+export type BoothMode = "generate" | "remix" | "mashup";
 
 export type TechniquePreset = {
   id: string;
@@ -12,132 +12,147 @@ export type BoothModeMeta = {
   eyebrow: string;
   title: string;
   blurb: string;
-  /** Deck A role label in the booth. */
-  slotA: string;
-  /** Deck B role label in the booth. */
-  slotB: string;
-  slotAHint: string;
-  slotBHint: string;
   actionIdle: string;
   actionBusy: string;
-  actionReady: (a: string, b: string) => string;
   briefLabel: string;
   briefPlaceholder: string;
   defaultPrompt: string;
   presets: TechniquePreset[];
   landingTitle: string;
   landingBlurb: string;
-  footerJoin: (a: string, b: string) => string;
 };
 
 /**
- * Product definitions:
- * - Mashup — beats of one song + lyrics/vocals of another
- * - Remix — one song remixed into a genre lane (EDM, dubstep, rock, country, …)
+ * Product pillars:
+ * - Generate — describe a song, AI writes a full listen (ACE-Step)
+ * - Remix — one owned song rebuilt onto a new beat/style
+ * - Mashup — beats of one owned track × lyrics/vocals of another
  */
 export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
+  generate: {
+    path: "/generate",
+    label: "Generate",
+    eyebrow: "AI generate",
+    title: "Describe a song. Get a song.",
+    blurb:
+      "Prompt, pick a style, optionally paste lyrics. After Hours generates a full track you can play and download — powered by ACE-Step, not a hidden Write tab.",
+    actionIdle: "Write a prompt first",
+    actionBusy: "Generating your song…",
+    briefLabel: "Song prompt",
+    briefPlaceholder:
+      "Late-night synth-pop about a last train home, big chorus, female vocal…",
+    defaultPrompt: "",
+    presets: [
+      {
+        id: "night_drive",
+        label: "Night drive",
+        prompt:
+          "Night-drive synth-pop, warm bass, bright chorus, original vocal, city lights.",
+      },
+      {
+        id: "club",
+        label: "Club hook",
+        prompt:
+          "Club-ready hook, punchy drums, catchy topline, late-night energy.",
+      },
+      {
+        id: "story",
+        label: "Story song",
+        prompt:
+          "Story-first song, clear verses and a singable chorus, intimate production.",
+      },
+      {
+        id: "instrumental",
+        label: "Instrumental",
+        prompt:
+          "Cinematic instrumental, no vocals, evolving drums and melody, radio-length.",
+      },
+    ],
+    landingTitle: "Generate",
+    landingBlurb: "Describe it. AI writes a full song.",
+  },
+  remix: {
+    path: "/remix",
+    label: "Remix",
+    eyebrow: "AI remix",
+    title: "Your song. New beat.",
+    blurb:
+      "Upload a track you own. Pick a lane — EDM, dubstep, rock, country, and more. AI builds a new production and lays your song on it for a full listen, not a DJ crossfade demo.",
+    actionIdle: "Load a song you own",
+    actionBusy: "Rebuilding the mix…",
+    briefLabel: "Remix brief (optional)",
+    briefPlaceholder:
+      "e.g. late-night dubstep drop, keep my vocal, huge bass — or dusty country train-beat…",
+    defaultPrompt:
+      "Rebuild this song in the selected style — keep the vocal character, new drums and bass.",
+    presets: [
+      {
+        id: "edm",
+        label: "EDM drop",
+        prompt:
+          "EDM remix — ride the vocal, festival clap, big 4/4, keep the hook.",
+      },
+      {
+        id: "dubstep",
+        label: "Dubstep",
+        prompt:
+          "Dubstep remix — half-time pocket, heavy bass, vocal stays up front.",
+      },
+      {
+        id: "rock",
+        label: "Rock",
+        prompt:
+          "Rock remix — live backbeat, guitar energy, vocal up for the chorus.",
+      },
+      {
+        id: "country",
+        label: "Country",
+        prompt:
+          "Country remix — train-beat groove, two-step pocket, story vocal clear.",
+      },
+    ],
+    landingTitle: "Remix",
+    landingBlurb: "One song you own, rebuilt onto a new beat.",
+  },
   mashup: {
     path: "/mashup",
     label: "Mashup",
     eyebrow: "Mashup booth",
     title: "Beats × Lyrics",
     blurb:
-      "Drop the groove from one track under the vocals of another — beat bed on A, lyrics on B, riding together.",
-    slotA: "Beats",
-    slotB: "Lyrics",
-    slotAHint: "Instrumental / beat bed you own",
-    slotBHint: "Vocal / lyrics track you own",
+      "Beats from one track you own, lyrics/vocals from another. After Hours beat-matches them into one mashup you can play and download.",
     actionIdle: "Load beats and lyrics",
     actionBusy: "Building the mashup…",
-    actionReady: (a, b) => `Mash ${a} × ${b}`,
-    briefLabel: "Mash brief",
-    briefPlaceholder:
-      "How should beats and lyrics lock? Long blend, filter wash, bass trade…",
+    briefLabel: "Mash note (optional)",
+    briefPlaceholder: "Keep vocals clear, kick driving…",
     defaultPrompt:
-      "Mash the beat bed under the lyrics — phrase-lock both, keep vocals clear and the kick driving.",
+      "Lock the beat under the lyrics — clear vocals, solid kick, full ride.",
     presets: [
       {
-        id: "long_blend",
+        id: "lock",
         label: "Lock & ride",
-        prompt:
-          "Lock the beat under the lyrics and ride both — clear vocals, solid kick, long blend.",
+        prompt: "Lock the beat under the lyrics and ride both — vocal clear, kick solid.",
       },
       {
-        id: "filter_blend",
-        label: "Filter wash",
-        prompt:
-          "Wash the beat in under the lyrics with a filter sweep — keep the vocal pocket open.",
+        id: "vocal_up",
+        label: "Vocal up",
+        prompt: "Push lyrics forward, keep the beat underneath, no muddy mids.",
       },
       {
-        id: "bass_swap",
-        label: "Bass trade",
-        prompt:
-          "Bass trade into the mash — lyrics stay up while the new kick takes the floor.",
-      },
-      {
-        id: "echo_out",
-        label: "Ghost intro",
-        prompt:
-          "Ghost the beat in with a short echo, then lock lyrics over the groove.",
+        id: "bass_first",
+        label: "Bass first",
+        prompt: "Let the beat bed lead; lyrics sit in the pocket.",
       },
     ],
     landingTitle: "Mashup",
     landingBlurb: "Beats from one song. Lyrics from another.",
-    footerJoin: (a, b) => `${a} × ${b}`,
-  },
-  remix: {
-    path: "/remix",
-    label: "Remix",
-    eyebrow: "AI DJ remix",
-    title: "You bring the song. AI DJ brings the beat.",
-    blurb:
-      "Load one song. Pick a remix lane — EDM, dubstep, rock, country, and more — and the AI DJ builds that groove, then drops a live remix onto it.",
-    slotA: "Song",
-    slotB: "AI beat",
-    slotAHint: "The track you want remixed",
-    slotBHint: "Genre beat from the AI DJ (or upload your own)",
-    actionIdle: "Load a song",
-    actionBusy: "AI DJ remixing…",
-    actionReady: (a, b) => `AI DJ remix ${a} → ${b}`,
-    briefLabel: "Remix brief (plain English)",
-    briefPlaceholder:
-      "e.g. late-night dubstep drop, keep my vocal vibes, huge bass — or dusty country train-beat under the chorus…",
-    defaultPrompt:
-      "Remix this song in the selected genre — keep the vibe, rebuild the drums and bass for that lane.",
-    presets: [
-      {
-        id: "edm",
-        label: "EDM drop",
-        prompt:
-          "EDM remix — ride the vocal, build tension, festival clap drop onto a big 4/4.",
-      },
-      {
-        id: "dubstep",
-        label: "Dubstep",
-        prompt:
-          "Dubstep remix — half-time pocket, tease the snare, heavy drop onto the new beat.",
-      },
-      {
-        id: "rock",
-        label: "Rock",
-        prompt:
-          "Rock remix — keep the vocal up, drive a live backbeat, power into the chorus feel.",
-      },
-      {
-        id: "country",
-        label: "Country",
-        prompt:
-          "Country remix — train-beat groove under the vocal, two-step pocket, clear story.",
-      },
-    ],
-    landingTitle: "Remix",
-    landingBlurb: "EDM, dubstep, rock, country — AI DJ remixes your song.",
-    footerJoin: (a, b) => `${a} → ${b}`,
   },
 };
 
+export const BOOTH_MODE_ORDER: BoothMode[] = ["generate", "remix", "mashup"];
+
 export function isBoothMode(value: string): value is BoothMode {
-  return value === "mashup" || value === "remix";
+  return value === "generate" || value === "remix" || value === "mashup";
 }
 
 /** Safe post-login redirect targets. */
@@ -149,6 +164,7 @@ export function safeNextPath(raw: string | null | undefined): string {
       : new URL(raw, "http://local");
     const path = url.pathname;
     if (
+      path === "/generate" ||
       path === "/mashup" ||
       path === "/remix" ||
       path === "/settings" ||
@@ -161,7 +177,6 @@ export function safeNextPath(raw: string | null | undefined): string {
     ) {
       return path;
     }
-    // Legacy settings?tab=…
     if (path === "/settings") {
       const tab = url.searchParams.get("tab");
       if (

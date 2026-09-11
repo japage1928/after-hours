@@ -41,7 +41,7 @@ export async function assertAiAllowed(
   if (entitlement.ok) return null;
   return (
     entitlement.reason ??
-    "Buy a mix credit or start a plan to use AI DJ planning."
+    "Buy a mix credit or start a plan to generate or remix with AI."
   );
 }
 
@@ -84,7 +84,7 @@ export async function chargeAfterMix(userId: string): Promise<void> {
     userId,
     kind: "mix_plan",
     amountCents: estimateMixCostCents(),
-    description: "AI mash/remix plan",
+    description: "AI song generation (ACE-Step)",
     preferSongCredit: true,
   });
 }

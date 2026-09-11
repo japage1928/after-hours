@@ -43,7 +43,7 @@ export const PLANS: Record<PlanId, Plan> = {
   song: {
     id: "song",
     name: "Single mix",
-    blurb: "One AI mash or remix — pay as you go.",
+    blurb: "One AI generate or remix — pay as you go.",
     priceCents: 299,
     kind: "one_time",
     usageBudgetCents: 0,
@@ -55,7 +55,7 @@ export const PLANS: Record<PlanId, Plan> = {
   basic: {
     id: "basic",
     name: "Basic",
-    blurb: "4 AI remixes each week (16 / month). Resets weekly.",
+    blurb: "4 AI generates/remixes each week (16 / month). Resets weekly.",
     priceCents: 999,
     kind: "subscription",
     usageBudgetCents: 300,
@@ -67,7 +67,7 @@ export const PLANS: Record<PlanId, Plan> = {
   plus: {
     id: "plus",
     name: "Plus",
-    blurb: "8 AI remixes each week (32 / month). Resets weekly.",
+    blurb: "8 AI generates/remixes each week (32 / month). Resets weekly.",
     priceCents: 1999,
     kind: "subscription",
     usageBudgetCents: 600,
@@ -79,7 +79,7 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    blurb: "12 AI remixes each week (48 / month). Resets weekly.",
+    blurb: "12 AI generates/remixes each week (48 / month). Resets weekly.",
     priceCents: 2999,
     kind: "subscription",
     usageBudgetCents: 900,

@@ -171,7 +171,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
     return {
       ok: false,
       reason: !underRemixCap
-        ? `Weekly remix limit reached (${plan.remixesPerWeek} / week on ${plan.name}). Resets next week, or upgrade for a bigger batch.`
+        ? `Weekly generate/remix limit reached (${plan.remixesPerWeek} / week on ${plan.name}). Resets next week, or upgrade for a bigger batch.`
         : "This month’s AI cost budget is used up. Upgrade or wait for the next billing period.",
       source: "subscription",
       planId: plan.id,
@@ -212,7 +212,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
   return {
     ok: false,
     reason:
-      "Free tier includes 1 AI remix per month. Buy a mix credit or start a plan for weekly batches.",
+      "Free tier includes 1 AI generate or remix per month. Buy a mix credit or start a plan for weekly batches.",
     source: "free",
     planId: "free",
     usageUsedCents: 0,
