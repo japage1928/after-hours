@@ -17,7 +17,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Mash two songs you load into one beat-matched cut. Also write original tracks.",
+          "Load two songs and mash them into one beat-matched remix.",
       },
       { name: "theme-color", content: "#0c0c0b" },
       { name: "apple-mobile-web-app-capable", content: "yes" },

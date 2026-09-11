@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
@@ -77,14 +77,14 @@ function LoginPage() {
       <div className="relative mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-2 md:px-8 lg:gap-16">
         <div className="order-2 md:order-1">
           <p className="text-xs font-medium tracking-[0.2em] text-muted uppercase">
-            Late-night studio
+            Remix booth
           </p>
           <h1 className="font-display mt-3 text-5xl leading-[0.95] tracking-tight text-fg sm:text-6xl md:text-7xl">
             After Hours
           </h1>
           <p className="mt-4 max-w-md text-base text-muted sm:text-lg">
-            Mash tracks. Write originals. Sign up to open the booth — plans are
-            only needed when you use AI writing.
+            Load two tracks you own and mash them into one beat-matched remix.
+            Sign up to open the booth.
           </p>
         </div>
 
@@ -98,7 +98,7 @@ function LoginPage() {
                 {mode === "signup" ? "Create account" : "Welcome back"}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Free to enter. Buy a song or plan when you write with AI.
+                Free remix booth — load two songs and mash them.
               </p>
             </div>
             {mode === "signup" ? (
@@ -189,12 +189,6 @@ function LoginPage() {
               </div>
             ) : null}
           </form>
-          <p className="mt-4 text-center text-sm text-subtle">
-            Curious about plans?{" "}
-            <Link to="/pricing" className="text-muted hover:text-fg">
-              See pricing
-            </Link>
-          </p>
         </div>
       </div>
     </div>

@@ -178,14 +178,6 @@ export function UserButton() {
           >
             Settings
           </Link>
-          <Link
-            to="/pricing"
-            role="menuitem"
-            className="block px-3 py-2 text-sm text-fg hover:bg-surface-2"
-            onClick={() => setOpen(false)}
-          >
-            Plans
-          </Link>
           {authEnabled && !gateSession ? (
             <button
               type="button"
