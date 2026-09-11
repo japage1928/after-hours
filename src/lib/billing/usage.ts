@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { getSql } from "@/lib/db";
 import {
+  COST_PER_REMIX_CENTS,
+  FREE_REMIXES_PER_MONTH,
   PLANS,
   planById,
   type PlanId,
@@ -14,20 +16,20 @@ export function newId(prefix: string): string {
 export type Entitlement = {
   ok: boolean;
   reason?: string;
-  source?: "song_credit" | "subscription" | "admin";
-  planId?: PlanId | null;
+  source?: "free" | "song_credit" | "subscription" | "admin";
+  planId?: PlanId | "free" | null;
   usageUsedCents: number;
   usageBudgetCents: number;
   songCredits: number;
+  /** Remixes used in the active free-month or paid-week window. */
+  remixesUsed: number;
+  /** Cap for that window (1 free / month, or weekly batch for subs). */
+  remixesLimit: number;
+  /** "month" for free tier, "week" for subscriptions. */
+  remixPeriod: "month" | "week" | "credit" | null;
   periodStart: string | null;
   periodEnd: string | null;
 };
-
-const ACTIVE_SUB_STATUSES = new Set([
-  "active",
-  "trialing",
-  "past_due",
-]);
 
 export async function getActiveSubscription(userId: string) {
   const sql = await getSql();
@@ -78,6 +80,55 @@ export async function sumUsageCents(
     where user_id = ${userId}
       and period_start = ${periodStart}
       and period_end = ${periodEnd}
+      and amount_cents > 0
+  `;
+  return Math.max(0, Number(rows[0]?.total ?? 0));
+}
+
+/** UTC Monday 00:00 → next Monday (weekly batch window). */
+export function currentWeekWindow(now = new Date()): {
+  start: Date;
+  end: Date;
+} {
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const day = start.getUTCDay(); // 0 Sun … 6 Sat
+  const diffToMonday = (day + 6) % 7;
+  start.setUTCDate(start.getUTCDate() - diffToMonday);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 7);
+  return { start, end };
+}
+
+/** UTC calendar month window. */
+export function currentMonthWindow(now = new Date()): {
+  start: Date;
+  end: Date;
+} {
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0),
+  );
+  const end = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0),
+  );
+  return { start, end };
+}
+
+export async function countRemixesInRange(
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<number> {
+  const sql = await getSql();
+  const rows = await sql<{ total: number }>`
+    select coalesce(count(*), 0)::int as total
+    from usage_ledger
+    where user_id = ${userId}
+      and kind in ('mix_plan', 'remix')
+      and created_at >= ${start}
+      and created_at < ${end}
   `;
   return Math.max(0, Number(rows[0]?.total ?? 0));
 }
@@ -85,77 +136,130 @@ export async function sumUsageCents(
 export async function getEntitlement(userId: string): Promise<Entitlement> {
   const credits = await countSongCredits(userId);
   const sub = await getActiveSubscription(userId);
-  const periodStart = sub?.current_period_start
-    ? iso(sub.current_period_start)
-    : null;
-  const periodEnd = sub?.current_period_end
-    ? iso(sub.current_period_end)
-    : null;
-  const budget = sub?.usage_budget_cents ?? 0;
-  const used = sub
-    ? await sumUsageCents(userId, sub.current_period_start, sub.current_period_end)
-    : 0;
+  const plan = sub ? planById(sub.plan_id) : null;
 
   if (credits > 0) {
+    const week = currentWeekWindow();
+    const used = sub
+      ? await sumUsageCents(
+          userId,
+          sub.current_period_start,
+          sub.current_period_end,
+        )
+      : 0;
     return {
       ok: true,
       source: "song_credit",
       planId: "song",
       usageUsedCents: used,
-      usageBudgetCents: budget,
+      usageBudgetCents: plan?.usageBudgetCents ?? 0,
       songCredits: credits,
-      periodStart,
-      periodEnd,
+      remixesUsed: 0,
+      remixesLimit: credits,
+      remixPeriod: "credit",
+      periodStart: iso(week.start),
+      periodEnd: iso(week.end),
     };
   }
 
-  if (sub && used < budget) {
-    return {
-      ok: true,
-      source: "subscription",
-      planId: (planById(sub.plan_id)?.id as PlanId) ?? null,
-      usageUsedCents: used,
-      usageBudgetCents: budget,
-      songCredits: 0,
-      periodStart,
-      periodEnd,
-    };
-  }
+  if (sub && plan?.kind === "subscription" && plan.remixesPerWeek) {
+    const week = currentWeekWindow();
+    const remixesUsed = await countRemixesInRange(
+      userId,
+      week.start,
+      week.end,
+    );
+    const usedCents = await sumUsageCents(
+      userId,
+      sub.current_period_start,
+      sub.current_period_end,
+    );
+    const budget = sub.usage_budget_cents ?? plan.usageBudgetCents;
+    const underRemixCap = remixesUsed < plan.remixesPerWeek;
+    const underDollarCap = usedCents < budget;
 
-  if (sub && used >= budget) {
+    if (underRemixCap && underDollarCap) {
+      return {
+        ok: true,
+        source: "subscription",
+        planId: plan.id,
+        usageUsedCents: usedCents,
+        usageBudgetCents: budget,
+        songCredits: 0,
+        remixesUsed,
+        remixesLimit: plan.remixesPerWeek,
+        remixPeriod: "week",
+        periodStart: iso(week.start),
+        periodEnd: iso(week.end),
+      };
+    }
+
     return {
       ok: false,
-      reason:
-        "AI usage for this billing period is used up. Buy a mix credit or upgrade your plan.",
+      reason: !underRemixCap
+        ? `Weekly remix limit reached (${plan.remixesPerWeek} / week on ${plan.name}). Resets next week, or upgrade for a bigger batch.`
+        : "This month’s AI cost budget is used up. Upgrade or wait for the next billing period.",
       source: "subscription",
-      planId: (planById(sub.plan_id)?.id as PlanId) ?? null,
-      usageUsedCents: used,
+      planId: plan.id,
+      usageUsedCents: usedCents,
       usageBudgetCents: budget,
       songCredits: 0,
-      periodStart,
-      periodEnd,
+      remixesUsed,
+      remixesLimit: plan.remixesPerWeek,
+      remixPeriod: "week",
+      periodStart: iso(week.start),
+      periodEnd: iso(week.end),
+    };
+  }
+
+  // Free tier — 1 AI remix per calendar month.
+  const month = currentMonthWindow();
+  const remixesUsed = await countRemixesInRange(
+    userId,
+    month.start,
+    month.end,
+  );
+  if (remixesUsed < FREE_REMIXES_PER_MONTH) {
+    return {
+      ok: true,
+      source: "free",
+      planId: "free",
+      usageUsedCents: 0,
+      usageBudgetCents: 0,
+      songCredits: 0,
+      remixesUsed,
+      remixesLimit: FREE_REMIXES_PER_MONTH,
+      remixPeriod: "month",
+      periodStart: iso(month.start),
+      periodEnd: iso(month.end),
     };
   }
 
   return {
     ok: false,
-    reason: "Buy a mix credit or start a plan to use AI DJ planning.",
+    reason:
+      "Free tier includes 1 AI remix per month. Buy a mix credit or start a plan for weekly batches.",
+    source: "free",
+    planId: "free",
     usageUsedCents: 0,
     usageBudgetCents: 0,
     songCredits: 0,
-    periodStart: null,
-    periodEnd: null,
+    remixesUsed,
+    remixesLimit: FREE_REMIXES_PER_MONTH,
+    remixPeriod: "month",
+    periodStart: iso(month.start),
+    periodEnd: iso(month.end),
   };
 }
 
-/** Consume a song credit or reserve subscription usage after a successful AI call. */
+/** Consume a song credit or record a remix against free/sub quota. */
 export async function recordUsage(opts: {
   userId: string;
   kind: string;
   amountCents: number;
   description: string;
   preferSongCredit?: boolean;
-}): Promise<{ via: "song_credit" | "subscription" }> {
+}): Promise<{ via: "song_credit" | "subscription" | "free" }> {
   const sql = await getSql();
   const preferCredit = opts.preferSongCredit !== false;
   if (preferCredit) {
@@ -172,47 +276,84 @@ export async function recordUsage(opts: {
         set remaining = remaining - 1
         where id = ${row.id} and remaining > 0
       `;
-      const until = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      await sql`
-        insert into usage_ledger (
-          id, user_id, kind, amount_cents, description, period_end
-        ) values (
-          ${newId("use")},
-          ${opts.userId},
-          ${"song_bundle"},
-          ${0},
-          ${opts.description},
-          ${until}
-        )
-      `;
+      if (opts.kind === "mix_plan" || opts.kind === "remix") {
+        const week = currentWeekWindow();
+        await sql`
+          insert into usage_ledger (
+            id, user_id, kind, amount_cents, description, period_start, period_end
+          ) values (
+            ${newId("use")},
+            ${opts.userId},
+            ${"mix_plan"},
+            ${0},
+            ${opts.description},
+            ${week.start},
+            ${week.end}
+          )
+        `;
+      } else {
+        const until = new Date(Date.now() + 2 * 60 * 60 * 1000);
+        await sql`
+          insert into usage_ledger (
+            id, user_id, kind, amount_cents, description, period_end
+          ) values (
+            ${newId("use")},
+            ${opts.userId},
+            ${"song_bundle"},
+            ${0},
+            ${opts.description},
+            ${until}
+          )
+        `;
+      }
       return { via: "song_credit" };
     }
   }
 
-  const sub = await getActiveSubscription(opts.userId);
-  if (!sub) throw new Error("No active subscription or song credit.");
-  const used = await sumUsageCents(
-    opts.userId,
-    sub.current_period_start,
-    sub.current_period_end,
-  );
-  if (used + opts.amountCents > sub.usage_budget_cents) {
-    throw new Error("Usage would exceed this period's budget.");
+  const entitlement = await getEntitlement(opts.userId);
+  if (!entitlement.ok) {
+    throw new Error(entitlement.reason ?? "Remix limit reached.");
   }
-  await sql`
-    insert into usage_ledger (
-      id, user_id, kind, amount_cents, description, period_start, period_end
-    ) values (
-      ${newId("use")},
-      ${opts.userId},
-      ${opts.kind},
-      ${opts.amountCents},
-      ${opts.description},
-      ${sub.current_period_start},
-      ${sub.current_period_end}
-    )
-  `;
-  return { via: "subscription" };
+
+  if (entitlement.source === "subscription") {
+    const sub = await getActiveSubscription(opts.userId);
+    if (!sub) throw new Error("No active subscription.");
+    const week = currentWeekWindow();
+    await sql`
+      insert into usage_ledger (
+        id, user_id, kind, amount_cents, description, period_start, period_end
+      ) values (
+        ${newId("use")},
+        ${opts.userId},
+        ${opts.kind},
+        ${opts.amountCents},
+        ${opts.description},
+        ${week.start},
+        ${week.end}
+      )
+    `;
+    return { via: "subscription" };
+  }
+
+  if (entitlement.source === "free") {
+    const month = currentMonthWindow();
+    await sql`
+      insert into usage_ledger (
+        id, user_id, kind, amount_cents, description, period_start, period_end
+      ) values (
+        ${newId("use")},
+        ${opts.userId},
+        ${opts.kind},
+        ${0},
+        ${opts.description},
+        ${month.start},
+        ${month.end}
+      )
+    `;
+    return { via: "free" };
+  }
+
+  throw new Error("No remix quota available.");
 }
 
 /** True when a single-song purchase still covers vocal render. */
@@ -274,16 +415,14 @@ export async function grantUsageCredit(opts: {
 }
 
 export function estimateLyricsCostCents(): number {
-  // ~2k in @ $2/M + ~1.5k out @ $6/M ≈ 1.3¢; pad to 5¢ for safety.
   return 5;
 }
 
 export function estimateMixCostCents(): number {
-  return 2;
+  return COST_PER_REMIX_CENTS;
 }
 
 export function estimateVocalCostCents(text: string): number {
-  // xAI TTS ≈ $15 / 1M characters.
   const chars = Math.max(text.length, 1);
   const cents = Math.ceil((chars / 1_000_000) * 1500);
   return Math.max(cents, 3);
@@ -293,4 +432,4 @@ export function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
-export { PLANS, SUBSCRIPTION_PLAN_IDS, planById };
+export { PLANS, SUBSCRIPTION_PLAN_IDS, planById, FREE_REMIXES_PER_MONTH };

@@ -89,11 +89,12 @@ export function LandingPage() {
             Plans
           </p>
           <h2 className="font-display mt-3 text-4xl text-fg md:text-5xl">
-            Pay when the AI DJ works
+            Free to start. Weekly batches when you go further.
           </h2>
           <p className="mt-3 max-w-xl text-sm text-muted sm:text-base">
-            Open the booth free. Song credits and monthly plans unlock AI
-            beat-matched mash and remix planning. Cancel anytime in Billing.
+            Every account gets 1 AI remix per month. Paid plans unlock weekly
+            remix batches that reset every week — sized so AI cost stays near 30%
+            of what you pay.
           </p>
           <div className="mt-10">
             <PlansGrid />

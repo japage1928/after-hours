@@ -19,7 +19,6 @@ import {
   resumeMySubscription,
   startBillingPortal,
 } from "@/lib/billing/billing-api";
-import { formatUsd } from "@/lib/billing/plans";
 import { type BoothMode, BOOTH_MODES } from "@/lib/booth-mode";
 import { readDefaultBooth, writeDefaultBooth } from "@/lib/prefs";
 import { useStudio } from "@/lib/store";
@@ -466,7 +465,11 @@ export function BillingPanel() {
       usageUsedCents: number;
       usageBudgetCents: number;
       songCredits: number;
+      remixesUsed: number;
+      remixesLimit: number;
+      remixPeriod: "month" | "week" | "credit" | null;
       periodEnd: string | null;
+      source?: string;
     };
     subscription: {
       id: string;
@@ -572,25 +575,28 @@ export function BillingPanel() {
             Plan:{" "}
             <span className="text-fg">
               {sub?.planName ??
-                (ent.songCredits > 0 ? "Song credits" : "None")}
+                (ent.songCredits > 0
+                  ? "Mix credits"
+                  : ent.source === "free"
+                    ? "Free"
+                    : "None")}
             </span>
             {sub?.priceLabel ? <span> · {sub.priceLabel}/mo</span> : null}
           </p>
-          {ent.usageBudgetCents > 0 ? (
-            <p>
-              Included AI this period:{" "}
-              <span className="text-fg">
-                {formatUsd(ent.usageUsedCents)} /{" "}
-                {formatUsd(ent.usageBudgetCents)}
-              </span>
-            </p>
-          ) : null}
-          {ent.songCredits > 0 ? (
-            <p>
-              Song credits:{" "}
-              <span className="text-fg">{ent.songCredits}</span>
-            </p>
-          ) : null}
+          <p>
+            AI remixes{" "}
+            {ent.remixPeriod === "week"
+              ? "this week"
+              : ent.remixPeriod === "month"
+                ? "this month"
+                : "available"}
+            :{" "}
+            <span className="text-fg">
+              {ent.songCredits > 0
+                ? `${ent.songCredits} credit(s)`
+                : `${ent.remixesUsed} / ${ent.remixesLimit}`}
+            </span>
+          </p>
           {sub?.cancelAtPeriodEnd && periodLabel ? (
             <p className="text-rec">Cancels at period end ({periodLabel}).</p>
           ) : periodLabel ? (

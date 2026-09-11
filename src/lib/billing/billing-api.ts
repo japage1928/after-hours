@@ -8,7 +8,7 @@ import {
   requireSessionUser,
   resumeSubscriptionForUser,
 } from "@/lib/billing/checkout";
-import { PLANS, type PlanId, formatUsd } from "@/lib/billing/plans";
+import { PLANS, type PlanId, formatUsd, FREE_REMIXES_PER_MONTH } from "@/lib/billing/plans";
 import { stripeConfigured } from "@/lib/billing/stripe";
 import {
   getActiveSubscription,
@@ -26,6 +26,13 @@ export const getBillingCatalog = createServerFn({ method: "GET" }).handler(
   async () => {
     return {
       stripeReady: stripeConfigured(),
+      free: {
+        name: "Free",
+        blurb: "1 AI remix or mashup per month. Booth stays open.",
+        remixesPerMonth: FREE_REMIXES_PER_MONTH,
+        remixesPerWeek: null as number | null,
+        priceLabel: "$0",
+      },
       plans: Object.values(PLANS).map((p) => ({
         id: p.id,
         name: p.name,
@@ -38,6 +45,8 @@ export const getBillingCatalog = createServerFn({ method: "GET" }).handler(
           ? formatUsd(p.usageBudgetCents)
           : null,
         songCredits: p.songCredits,
+        remixesPerMonth: p.remixesPerMonth,
+        remixesPerWeek: p.remixesPerWeek,
       })),
     };
   },

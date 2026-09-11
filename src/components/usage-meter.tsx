@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { getMyBilling } from "@/lib/billing/billing-api";
-import { formatUsd } from "@/lib/billing/plans";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 type Entitlement = {
   ok: boolean;
   songCredits: number;
-  usageUsedCents: number;
-  usageBudgetCents: number;
+  remixesUsed: number;
+  remixesLimit: number;
+  remixPeriod: "month" | "week" | "credit" | null;
+  source?: string;
 };
 
 /**
- * Compact usage meter for the studio header — shows included AI without
- * exposing internal margin math.
+ * Compact usage meter for the studio header — remix quota, not internal cost.
  */
 export function UsageMeter() {
   const user = useCurrentUser();
@@ -39,20 +39,24 @@ export function UsageMeter() {
   if (!user || user.isDevFallback) return null;
 
   const credits = entitlement?.songCredits ?? 0;
-  const used = entitlement?.usageUsedCents ?? 0;
-  const budget = entitlement?.usageBudgetCents ?? 0;
-  const ratio = budget > 0 ? Math.min(1, used / budget) : 0;
+  const used = entitlement?.remixesUsed ?? 0;
+  const limit = entitlement?.remixesLimit ?? 1;
+  const remaining = Math.max(0, limit - used);
+  const ratio = limit > 0 ? Math.min(1, used / limit) : 0;
+  const period =
+    entitlement?.remixPeriod === "week"
+      ? "this week"
+      : entitlement?.remixPeriod === "month"
+        ? "this month"
+        : "ready";
 
   return (
     <Link
       to="/pricing"
       className="hidden items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted shadow-border transition-colors hover:text-fg sm:flex"
-      title="AI DJ usage — upgrade when you need more planning"
+      title="AI remix quota — upgrade for weekly batches"
     >
-      <span
-        className="relative grid size-8 place-items-center"
-        aria-hidden
-      >
+      <span className="relative grid size-8 place-items-center" aria-hidden>
         <svg viewBox="0 0 36 36" className="size-8 -rotate-90">
           <circle
             cx="18"
@@ -72,7 +76,7 @@ export function UsageMeter() {
             )}
             strokeWidth="3"
             strokeDasharray={`${2 * Math.PI * 14}`}
-            strokeDashoffset={`${2 * Math.PI * 14 * (1 - (credits > 0 ? 1 : ratio))}`}
+            strokeDashoffset={`${2 * Math.PI * 14 * (1 - (credits > 0 ? 1 : 1 - ratio))}`}
             strokeLinecap="round"
           />
         </svg>
@@ -81,22 +85,22 @@ export function UsageMeter() {
         {credits > 0 ? (
           <>
             <span className="block font-medium text-fg">
-              {credits} song credit{credits === 1 ? "" : "s"}
+              {credits} mix credit{credits === 1 ? "" : "s"}
             </span>
             <span className="text-subtle">Ready to mix</span>
           </>
-        ) : budget > 0 ? (
+        ) : entitlement?.ok ? (
           <>
             <span className="block font-medium text-fg">
-              {formatUsd(Math.max(0, budget - used))} left
+              {remaining} left {period}
             </span>
             <span className="text-subtle">
-              of {formatUsd(budget)} AI this month
+              of {limit} AI remix{limit === 1 ? "" : "es"}
             </span>
           </>
         ) : (
           <>
-            <span className="block font-medium text-fg">Unlock AI DJ</span>
+            <span className="block font-medium text-fg">Quota used</span>
             <span className="text-subtle">View plans</span>
           </>
         )}

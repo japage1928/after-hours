@@ -21,8 +21,8 @@ export async function currentUserEmail(
 }
 
 /**
- * Gate Write / mash AI behind subscription, song credit, or admin allowlist.
- * Returns an error string when blocked; null when allowed.
+ * Gate AI remix/mash behind free monthly quota, subscription weekly batch,
+ * song credit, or admin allowlist.
  */
 export async function assertAiAllowed(
   userId: string,
@@ -80,7 +80,7 @@ export async function chargeAfterMix(userId: string): Promise<void> {
     userId,
     kind: "mix_plan",
     amountCents: estimateMixCostCents(),
-    description: "Mash plan",
-    preferSongCredit: false,
+    description: "AI mash/remix plan",
+    preferSongCredit: true,
   });
 }
