@@ -83,9 +83,9 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
         <div className="rounded-2xl border border-rec/35 bg-rec/10 px-4 py-3">
           <p className="font-display text-2xl text-fg">Unlock AI generate & remix</p>
           <p className="mt-1 text-sm text-muted">
-            Free includes 1 AI generate or remix per month. Paid plans unlock
-            weekly batches that reset every week. Mashup of owned tracks is
-            included. Cancel anytime from Billing.
+            Free includes {free?.remixesPerMonth ?? 2} AI generates or remixes
+            per month. Paid plans unlock weekly batches that reset every week.
+            Mashup of owned tracks is included. Cancel anytime from Billing.
           </p>
         </div>
       ) : null}
@@ -119,7 +119,7 @@ export function PlansGrid({ compact = false, className, paywall }: Props) {
               {free.remixesPerMonth} AI generate or remix / month
             </p>
             <Button asChild variant="secondary" className="mt-auto w-full">
-              <Link to={user ? "/mashup" : "/login"} search={user ? undefined : { next: "/mashup" }}>
+              <Link to={user ? "/generate" : "/login"} search={user ? undefined : { next: "/generate" }}>
                 Open booth
               </Link>
             </Button>

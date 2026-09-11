@@ -167,6 +167,7 @@ export function safeNextPath(raw: string | null | undefined): string {
       path === "/generate" ||
       path === "/mashup" ||
       path === "/remix" ||
+      path === "/help" ||
       path === "/settings" ||
       path === "/projects" ||
       path === "/profile" ||

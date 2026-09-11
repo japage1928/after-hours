@@ -12,7 +12,7 @@ describe("humanizeStudioError", () => {
 
   it("passes quota copy through", () => {
     const raw =
-      "Free tier includes 1 AI remix per month. Buy a mix credit or start a plan for weekly batches.";
+      "Free tier includes 2 AI generates or remixes per month. Buy a mix credit or start a plan for weekly batches. Mashups of tracks you own don’t use this quota.";
     assert.equal(humanizeStudioError(raw), raw);
   });
 

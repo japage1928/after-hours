@@ -18,6 +18,7 @@ describe("booth modes", () => {
   it("allows generate as a post-login redirect", () => {
     assert.equal(safeNextPath("/generate"), "/generate");
     assert.equal(safeNextPath("/remix"), "/remix");
+    assert.equal(safeNextPath("/help"), "/help");
     assert.equal(safeNextPath("https://evil.example/phish"), "/");
   });
 });

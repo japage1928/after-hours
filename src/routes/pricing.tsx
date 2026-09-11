@@ -5,6 +5,7 @@ import { PlansGrid } from "@/components/plans-grid";
 import { startBillingPortal } from "@/lib/billing/billing-api";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
+import { NeedHelpLink } from "@/components/need-help-link";
 
 export const Route = createFileRoute("/pricing")({
   component: PricingPage,
@@ -44,12 +45,13 @@ function PricingPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Plans</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Free includes 1 AI generate or remix per month. Basic / Plus / Pro unlock weekly
+            Free includes 2 AI generates or remixes per month. Basic / Plus / Pro unlock weekly
             batches (4 / 8 / 12) that reset every week. Mashup of two owned tracks
-            runs on your device. Cancel anytime from Billing.
+            runs on your device — no AI quota. Cancel anytime from Billing.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <NeedHelpLink />
           <Button asChild variant="secondary">
             <Link to="/">Home</Link>
           </Button>
@@ -68,7 +70,7 @@ function PricingPage() {
 
       {error ? <p className="text-sm text-rec">{error}</p> : null}
 
-      <PlansGrid paywall />
+      <PlansGrid />
     </div>
   );
 }

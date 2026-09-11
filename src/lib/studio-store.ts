@@ -28,6 +28,12 @@ import { getStudioCapabilities } from "@/lib/studio-capabilities";
 import { humanizeStudioError } from "@/lib/studio-errors";
 import { studioPlayer } from "@/lib/studio-player";
 import type { BoothMode } from "@/lib/booth-mode";
+import { bumpUsageMeter } from "@/lib/usage-events";
+import {
+  saveStudioResult,
+  takeLibraryHandoff,
+  getSavedTrack,
+} from "@/lib/track-library";
 
 export type StudioStatus =
   | "idle"
@@ -53,6 +59,8 @@ export type StudioResult = {
   bpm?: number;
   engine: "ace-step" | "local-mix";
   summary: string;
+  style?: GrooveStyle;
+  prompt?: string;
   /** Original ACE-Step payload for lossless-ish download. */
   aceStepBase64?: string;
   aceStepMime?: string;
@@ -75,7 +83,13 @@ type StudioState = {
   sourceA: LoadedTrack | null;
   sourceB: LoadedTrack | null;
   result: StudioResult | null;
+  lastLibrarySave: { id: string; title: string } | null;
   hydrate: () => Promise<void>;
+  loadSourceFromBuffer: (
+    slot: "a" | "b",
+    buffer: AudioBuffer,
+    name: string,
+  ) => Promise<void>;
   setPrompt: (v: string) => void;
   setLyrics: (v: string) => void;
   setInstrumental: (v: boolean) => void;
@@ -85,7 +99,7 @@ type StudioState = {
   clearSource: (slot: "a" | "b") => void;
   generate: () => Promise<void>;
   remix: (opts?: { localPreview?: boolean }) => Promise<void>;
-  mashup: () => Promise<void>;
+  mashup: (opts?: { localBeat?: boolean }) => Promise<void>;
   playResult: () => Promise<void>;
   pauseResult: () => void;
   stopResult: () => void;
@@ -120,6 +134,82 @@ function longLocalBed(
   return renderAiBeat(offline, { bpm, style, bars });
 }
 
+function trackFromBuffer(
+  name: string,
+  buffer: AudioBuffer,
+  bpm: number,
+  peaks: number[],
+): LoadedTrack {
+  return {
+    name,
+    buffer,
+    bpm,
+    duration: buffer.duration,
+    peaks,
+  };
+}
+
+async function persistBoothResult(
+  set: (partial: {
+    lastLibrarySave: { id: string; title: string } | null;
+  }) => void,
+  get: () => { grooveStyle: GrooveStyle; prompt: string },
+  result: StudioResult,
+) {
+  if (result.engine === "ace-step") bumpUsageMeter();
+  try {
+    const saved = await saveStudioResult(result, {
+      style: get().grooveStyle,
+      prompt: get().prompt,
+    });
+    set({ lastLibrarySave: { id: saved.id, title: saved.title } });
+  } catch {
+    /* IndexedDB is best-effort — play/download still work. */
+  }
+}
+
+async function applyLibraryHandoff(
+  set: (
+    partial: Partial<StudioState>,
+  ) => void,
+  get: () => StudioState,
+) {
+  const handoff = takeLibraryHandoff();
+  if (!handoff) return;
+  if (handoff.kind === "generate-again") {
+    set({
+      prompt: handoff.prompt,
+      grooveStyle: handoff.style,
+      lyrics: handoff.lyrics ?? "",
+      status: "idle",
+      statusText: "Prompt loaded — generate another style.",
+      error: null,
+    });
+    return;
+  }
+  try {
+    const rec = await getSavedTrack(handoff.trackId);
+    if (!rec) return;
+    const buffer = await studioPlayer.decodeBytes(await rec.blob.arrayBuffer());
+    const guess = detectBpm(buffer);
+    const track = trackFromBuffer(rec.title, buffer, guess.bpm, guess.peaks);
+    set({
+      sourceA: track,
+      result: null,
+      grooveStyle: handoff.style ?? rec.style ?? get().grooveStyle,
+      status: "idle",
+      statusText: `${rec.title} loaded — pick a style and remix.`,
+      error: null,
+    });
+  } catch {
+    set({
+      status: "error",
+      error: "Couldn’t load that library track. Try downloading it and uploading again.",
+      statusText: "Library handoff failed.",
+    });
+  }
+}
+
 export const useStudioBooth = create<StudioState>((set, get) => ({
   ready: false,
   status: "idle",
@@ -137,6 +227,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
   sourceA: null,
   sourceB: null,
   result: null,
+  lastLibrarySave: null,
 
   setPrompt: (prompt) => set({ prompt }),
   setLyrics: (lyrics) => set({ lyrics }),
@@ -173,6 +264,7 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       }
     }
     set({ ready: true });
+    await applyLibraryHandoff(set, get);
   },
 
   loadSource: async (slot, file) => {
@@ -233,6 +325,19 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         statusText: "Could not read the track.",
       });
     }
+  },
+
+  loadSourceFromBuffer: async (slot, buffer, name) => {
+    await studioPlayer.ensure();
+    const guess = detectBpm(buffer);
+    const track = trackFromBuffer(name, buffer, guess.bpm, guess.peaks);
+    set({
+      status: "idle",
+      statusText: `${name} · ${guess.bpm} BPM · ${Math.round(buffer.duration)}s`,
+      error: null,
+      result: null,
+      ...(slot === "a" ? { sourceA: track } : { sourceB: track }),
+    });
   },
 
   clearSource: (slot) => {
@@ -325,23 +430,27 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         return;
       }
       studioPlayer.load(buffer);
+      const result: StudioResult = {
+        title: intent.job.summary.slice(0, 80) || "Generated song",
+        mode: "generate",
+        buffer,
+        peaks: waveformPeaks(buffer),
+        duration: buffer.duration,
+        bpm: run.result.bpm ?? intent.job.bpm,
+        engine: "ace-step",
+        summary: intent.job.summary,
+        style: grooveStyle,
+        prompt: brief,
+        aceStepBase64: run.result.audioBase64,
+        aceStepMime: run.result.mime,
+      };
       set({
         status: "ready",
-        statusText: "Ready — play or download.",
+        statusText: "Ready — play or download. Saved to your library.",
         error: null,
-        result: {
-          title: intent.job.summary.slice(0, 80) || "Generated song",
-          mode: "generate",
-          buffer,
-          peaks: waveformPeaks(buffer),
-          duration: buffer.duration,
-          bpm: run.result.bpm ?? intent.job.bpm,
-          engine: "ace-step",
-          summary: intent.job.summary,
-          aceStepBase64: run.result.audioBase64,
-          aceStepMime: run.result.mime,
-        },
+        result,
       });
+      await persistBoothResult(set, get, result);
     } catch (err) {
       if (gen !== jobGen) return;
       set({
@@ -396,23 +505,27 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         sampleRate: studioPlayer.sampleRate(),
       });
       studioPlayer.load(mixed);
+      const result: StudioResult = {
+        title: `${sourceA.name} · ${grooveLabel(grooveStyle)} remix`,
+        mode: "remix",
+        buffer: mixed,
+        peaks: waveformPeaks(mixed),
+        duration: mixed.duration,
+        bpm: bedBpm,
+        engine,
+        summary,
+        style: grooveStyle,
+        prompt: get().prompt,
+        aceStepBase64: ace?.audioBase64,
+        aceStepMime: ace?.mime,
+      };
       set({
         status: "ready",
-        statusText: "Ready — play or download.",
+        statusText: "Ready — play or download. Saved to your library.",
         error: null,
-        result: {
-          title: `${sourceA.name} · ${grooveLabel(grooveStyle)} remix`,
-          mode: "remix",
-          buffer: mixed,
-          peaks: waveformPeaks(mixed),
-          duration: mixed.duration,
-          bpm: bedBpm,
-          engine,
-          summary,
-          aceStepBase64: ace?.audioBase64,
-          aceStepMime: ace?.mime,
-        },
+        result,
       });
+      await persistBoothResult(set, get, result);
     };
 
     try {
@@ -454,11 +567,19 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
         return;
       }
       if (!intent.aceStepReady) {
-        set({
-          status: "error",
-          error: humanizeStudioError("ACE-Step is not configured on this deploy."),
-          statusText: "ACE-Step isn’t configured.",
-        });
+        const bpm = remixBpmForStyle(sourceA.bpm, grooveStyle);
+        const bed = longLocalBed(
+          grooveStyle,
+          bpm,
+          Math.max(32, sourceA.duration),
+        );
+        if (gen !== jobGen) return;
+        await finishMix(
+          bed,
+          bpm,
+          "local-mix",
+          `Local ${grooveLabel(grooveStyle)} drum-bed preview — ACE-Step isn’t configured on this deploy.`,
+        );
         return;
       }
 
@@ -513,21 +634,48 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
     }
   },
 
-  mashup: async () => {
-    const { sourceA, sourceB } = get();
-    if (!sourceA || !sourceB) {
+  mashup: async (opts) => {
+    const { sourceB, grooveStyle } = get();
+    let sourceA = get().sourceA;
+    if (!sourceB) {
       set({
         status: "error",
-        error: "Load beats and a lyrics/vocals track you own.",
-        statusText: "Need two tracks.",
+        error: "Load a lyrics/vocals track you own.",
+        statusText: "Need lyrics.",
       });
       return;
     }
+    if (!sourceA && !opts?.localBeat) {
+      set({
+        status: "error",
+        error: "Load beats you own, or mash with a labeled local preview beat.",
+        statusText: "Need beats.",
+      });
+      return;
+    }
+    if (!sourceA && opts?.localBeat) {
+      const bpm = Math.max(70, Math.min(180, sourceB.bpm || 120));
+      const bed = longLocalBed(
+        grooveStyle,
+        bpm,
+        Math.max(32, sourceB.duration),
+      );
+      sourceA = trackFromBuffer(
+        `Local ${grooveLabel(grooveStyle)} preview beat`,
+        bed,
+        bpm,
+        syntheticPeaks(bed),
+      );
+      set({ sourceA });
+    }
+    if (!sourceA) return;
     const gen = ++jobGen;
     studioPlayer.stop();
     set({
       status: "generating",
-      statusText: "Beat-matching beats × lyrics…",
+      statusText: opts?.localBeat
+        ? "Mashing lyrics over a local preview beat…"
+        : "Beat-matching beats × lyrics…",
       error: null,
       needsUpgrade: false,
       result: null,
@@ -545,21 +693,27 @@ export const useStudioBooth = create<StudioState>((set, get) => ({
       });
       if (gen !== jobGen) return;
       studioPlayer.load(mixed);
+      const result: StudioResult = {
+        title: `${sourceA.name} × ${sourceB.name}`,
+        mode: "mashup",
+        buffer: mixed,
+        peaks: waveformPeaks(mixed),
+        duration: mixed.duration,
+        bpm: sourceA.bpm,
+        engine: "local-mix",
+        summary: opts?.localBeat
+          ? "Lyrics over a local drum-bed preview — not your beats file, not ACE-Step."
+          : "Beats × lyrics mashup (beat-matched, EQ-split, bounced).",
+        style: grooveStyle,
+        prompt: get().prompt,
+      };
       set({
         status: "ready",
-        statusText: "Ready — play or download.",
+        statusText: "Ready — play or download. Saved to your library.",
         error: null,
-        result: {
-          title: `${sourceA.name} × ${sourceB.name}`,
-          mode: "mashup",
-          buffer: mixed,
-          peaks: waveformPeaks(mixed),
-          duration: mixed.duration,
-          bpm: sourceA.bpm,
-          engine: "local-mix",
-          summary: "Beats × lyrics mashup (beat-matched, EQ-split, bounced).",
-        },
+        result,
       });
+      await persistBoothResult(set, get, result);
     } catch (err) {
       if (gen !== jobGen) return;
       set({

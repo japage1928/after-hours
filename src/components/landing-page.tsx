@@ -3,6 +3,7 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
 import { BOOTH_MODE_ORDER, BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
 import { PlansGrid } from "@/components/plans-grid";
+import { NeedHelpLink } from "@/components/need-help-link";
 import { cn } from "@/lib/utils";
 
 export function LandingPage() {
@@ -36,6 +37,7 @@ export function LandingPage() {
             >
               Plans
             </Link>
+            <NeedHelpLink className="rounded-md bg-surface-2/90 px-3 py-2 text-sm no-underline hover:bg-surface" muted={false} />
             {user ? (
               <UserButton />
             ) : (
@@ -55,9 +57,9 @@ export function LandingPage() {
               After Hours
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
-              A creator booth for songs you make and tracks you own. Generate a
-              full song from a prompt, remix one onto a new beat, or mash beats
-              with lyrics.
+              AI song, remix, or mashup in the browser. Generate a full track
+              from a prompt, rebuild one you own onto a new beat, or mash beats
+              with lyrics — then play and download.
             </p>
           </div>
 
@@ -88,12 +90,13 @@ export function LandingPage() {
             Plans
           </p>
           <h2 className="font-display mt-3 text-4xl text-fg md:text-5xl">
-            Free to start. Weekly batches when you go further.
+            Two AI songs free. Weekly batches when you go further.
           </h2>
           <p className="mt-3 max-w-xl text-sm text-muted sm:text-base">
-            Every account gets 1 AI generate or remix per month. Paid plans
-            unlock weekly batches that reset every week. Mashup of two owned
-            tracks is included — it runs on your device.
+            Every account gets 2 AI generates or remixes per month — enough to
+            finish a real track on visit one. Paid plans unlock weekly batches
+            that reset every week. Mashup of two owned tracks is included — it
+            runs on your device.
           </p>
           <div className="mt-10">
             <PlansGrid />

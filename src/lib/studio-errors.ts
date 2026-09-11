@@ -73,5 +73,5 @@ export function engineLabel(opts: {
       ? "AI generation powered by ACE-Step (prompts via xAI)"
       : "AI generation powered by ACE-Step";
   }
-  return "ACE-Step is not configured — Generate needs an ACE-Step host.";
+  return "ACE-Step is not configured — Generate needs an ACE-Step host. Mashup and a labeled local remix preview still work in this browser.";
 }

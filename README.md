@@ -6,9 +6,21 @@ Creator booth with three modes:
 2. **Remix** — upload a song you own; AI rebuilds it onto a new beat/style (EDM, dubstep, rock, country, …)
 3. **Mashup** — two owned tracks: beats from one, lyrics/vocals from the other, bounced into one listen
 
-Auth, billing, library, and admin sit around that booth. This is not a DJ-crossfade demo and not a hidden Write tab.
+Auth, billing, **device library**, and admin sit around that booth. This is not a DJ-crossfade demo and not a hidden Write tab.
 
 Generation is **ACE-Step** (not Suno). The booth labels the engine honestly.
+
+## Session one
+
+Cold signup → pick Generate, Remix, or Mashup → play + download before you leave.
+
+- **Generate** needs `ACE_STEP_BASE_URL`. There is no fake song.
+- **Remix** uses ACE-Step when configured. If it isn’t, the primary remix still finishes on a **labeled local drum-bed** (not ACE-Step, no AI quota).
+- **Mashup** always runs in the browser. Two owned files, or lyrics + a labeled local preview beat.
+
+Free accounts get **2 AI generates/remixes per month**. Mashups don’t spend that quota. The paywall appears after those jobs are used — not before the first track. Finished audio saves to **Library** (`/projects`) with Remix this / Try another style.
+
+Need help? `/help` emails the owner. Ticket UI can land separately.
 
 ## How each mode works
 
@@ -29,13 +41,13 @@ Generate **requires** ACE-Step. There is no fake song if the model isn’t confi
 4. Client **bounce**: high-pass the original over the new bed, beat-matched, full duration — a real listen, not an intro→tease→drop DJ show.
 5. Play + download WAV.
 
-If ACE-Step isn’t configured, Remix says so. A secondary **local drum-bed preview** exists and is labeled as not ACE-Step.
+If ACE-Step isn’t configured, Remix still finishes with a **labeled local drum-bed preview** (not ACE-Step, no quota). You can also pick that path on purpose.
 
 ### Mashup (`/mashup`)
 
 1. Load beats (A) and lyrics/vocals (B) you own.
 2. Bounce: time-stretch lyrics to the beat BPM, EQ-split (kick/bass vs vocal), 2-bar intro, then lock both.
-3. Play + download WAV. Runs on-device; does not spend AI quota.
+3. Play + download WAV. Runs on-device; does not spend AI quota. If you only have vocals, mash over a **labeled local preview beat**.
 
 ## Env vars
 

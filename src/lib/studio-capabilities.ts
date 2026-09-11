@@ -18,7 +18,7 @@ export const getStudioCapabilities = createServerFn({ method: "GET" }).handler(
       ? xai
         ? `AI generation powered by ACE-Step (${model}); prompts via xAI`
         : `AI generation powered by ACE-Step (${model})`
-      : "ACE-Step is not configured — Generate and AI remix need ACE_STEP_BASE_URL.";
+      : "ACE-Step is not configured — Generate and AI remix need ACE_STEP_BASE_URL. Mashup and a labeled local remix preview still work in this browser.";
     return { aceStep, xai, model, engineLabel };
   },
 );

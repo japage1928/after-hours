@@ -5,6 +5,7 @@ import {
   FREE_REMIXES_PER_MONTH,
   PLANS,
   planById,
+  freeTierBlockedReason,
   type PlanId,
   SUBSCRIPTION_PLAN_IDS,
 } from "@/lib/billing/plans";
@@ -186,7 +187,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
     };
   }
 
-  // Free tier — 1 AI remix per calendar month.
+  // Free tier — AI generates/remixes per calendar month.
   const month = currentMonthWindow();
   const remixesUsed = await countRemixesInRange(
     userId,
@@ -212,7 +213,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
   return {
     ok: false,
     reason:
-      "Free tier includes 1 AI generate or remix per month. Buy a mix credit or start a plan for weekly batches.",
+      freeTierBlockedReason(),
     source: "free",
     planId: "free",
     usageUsedCents: 0,

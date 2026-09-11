@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { NeedHelpLink } from "@/components/need-help-link";
 import {
   deleteMyAccount,
   listMyAuthProviders,
@@ -21,9 +22,16 @@ import {
 } from "@/lib/billing/billing-api";
 import { type BoothMode, BOOTH_MODES } from "@/lib/booth-mode";
 import { readDefaultBooth, writeDefaultBooth } from "@/lib/prefs";
-import { useStudio } from "@/lib/store";
+import {
+  deleteSavedTrack,
+  downloadExtension,
+  listSavedTracks,
+  nextGrooveStyle,
+  writeLibraryHandoff,
+  type SavedTrack,
+} from "@/lib/track-library";
 import { ACCOUNT_PAGES, type AccountPagePath } from "@/lib/account-nav";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 
 export type { AccountPagePath };
 export { ACCOUNT_PAGES };
@@ -46,11 +54,12 @@ export function AccountShell({
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Account</h1>
           <p className="mt-2 text-sm text-muted">
-            Settings, projects, profile, billing — and a clear exit when you want
+            Settings, library, profile, billing — and a clear exit when you want
             one.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <NeedHelpLink />
           <Button asChild variant="secondary">
             <Link to="/">Home</Link>
           </Button>
@@ -161,8 +170,8 @@ export function SettingsPanel() {
           </button>
         </div>
         <p className="text-xs text-subtle">
-          Landing still offers both booths. This only remembers a preference for
-          shortcuts on this browser.
+          Landing still offers Generate, Remix, and Mashup. This only remembers
+          a preference for shortcuts on this browser.
         </p>
       </div>
     </Panel>
@@ -170,60 +179,145 @@ export function SettingsPanel() {
 }
 
 export function ProjectsPanel() {
-  const hydrate = useStudio((s) => s.hydrate);
-  const library = useStudio((s) => s.library);
-  const deleteSong = useStudio((s) => s.deleteSong);
-  const exportSong = useStudio((s) => s.exportSong);
-  const exportLibrary = useStudio((s) => s.exportLibrary);
+  const [tracks, setTracks] = useState<SavedTrack[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      const rows = await listSavedTracks();
+      setTracks(rows);
+      setError(null);
+    } catch (err) {
+      setTracks([]);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn’t open the library on this device.",
+      );
+    }
+  }
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    void refresh();
+  }, []);
+
+  function downloadTrack(track: SavedTrack) {
+    const url = URL.createObjectURL(track.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const slug =
+      track.title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "after-hours";
+    a.download = `${slug}.${downloadExtension(track.mime)}`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4_000);
+  }
+
+  function remixThis(track: SavedTrack) {
+    writeLibraryHandoff({
+      kind: "remix-source",
+      trackId: track.id,
+      style: track.style,
+    });
+    window.location.assign("/remix");
+  }
+
+  function tryAnotherStyle(track: SavedTrack) {
+    const style = nextGrooveStyle(track.style);
+    if (track.mode === "generate" && track.prompt) {
+      writeLibraryHandoff({
+        kind: "generate-again",
+        prompt: track.prompt,
+        style,
+      });
+      window.location.assign("/generate");
+      return;
+    }
+    writeLibraryHandoff({
+      kind: "remix-source",
+      trackId: track.id,
+      style,
+    });
+    window.location.assign("/remix");
+  }
 
   return (
     <Panel
-      title="Projects"
-      blurb="Songs saved on this device from Write-era sessions and exports."
+      title="Library"
+      blurb="Completed Generate, Remix, and Mashup tracks on this device — play, download, or take another pass."
     >
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary" size="sm">
-          <Link to="/mashup">Open mashup</Link>
+          <Link to="/generate">Generate</Link>
         </Button>
         <Button asChild variant="secondary" size="sm">
-          <Link to="/remix">Open remix</Link>
+          <Link to="/remix">Remix</Link>
         </Button>
-        {library.length > 0 ? (
-          <Button variant="secondary" size="sm" onClick={() => exportLibrary()}>
-            Export all
-          </Button>
-        ) : null}
+        <Button asChild variant="secondary" size="sm">
+          <Link to="/mashup">Mashup</Link>
+        </Button>
       </div>
 
-      {library.length === 0 ? (
+      {error ? <p className="text-sm text-rec">{error}</p> : null}
+
+      {tracks === null ? (
+        <p className="text-sm text-muted">Loading library…</p>
+      ) : tracks.length === 0 ? (
         <p className="text-sm text-muted">
-          No saved projects yet. Cuts you keep on this browser will show up here.
+          No finished tracks yet. Generate, remix, or mashup once and the result
+          lands here automatically.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {library.map((song) => (
+        <ul className="flex flex-col gap-3">
+          {tracks.map((track) => (
             <li
-              key={song.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-3 shadow-border"
+              key={track.id}
+              className="flex flex-col gap-3 rounded-xl bg-surface-2 px-3 py-3 shadow-border"
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-fg">{song.title}</p>
-                <p className="text-xs text-muted">
-                  {song.bpm ? `${Math.round(song.bpm)} BPM` : "Song"} ·{" "}
-                  {song.mode ?? "cut"}
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-fg">{track.title}</p>
+                  <p className="text-xs text-muted">
+                    {track.mode}
+                    {track.bpm ? ` · ${Math.round(track.bpm)} BPM` : ""}
+                    {` · ${formatTime(track.duration)}`}
+                    {` · ${track.engine === "ace-step" ? "ACE-Step" : "Local mix"}`}
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2">
+              {playingId === track.id ? (
+                <LibraryAudio blob={track.blob} />
+              ) : null}
+              <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => exportSong(song)}
+                  onClick={() =>
+                    setPlayingId((id) => (id === track.id ? null : track.id))
+                  }
                 >
-                  Export
+                  {playingId === track.id ? "Hide player" : "Play"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => downloadTrack(track)}
+                >
+                  Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => remixThis(track)}
+                >
+                  Remix this
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => tryAnotherStyle(track)}
+                >
+                  Try another style
                 </Button>
                 <Button
                   size="sm"
@@ -232,10 +326,10 @@ export function ProjectsPanel() {
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Delete “${song.title}” from this device?`,
+                        `Delete “${track.title}” from this device?`,
                       )
                     ) {
-                      deleteSong(song.id);
+                      void deleteSavedTrack(track.id).then(() => refresh());
                     }
                   }}
                 >
@@ -248,6 +342,12 @@ export function ProjectsPanel() {
       )}
     </Panel>
   );
+}
+
+function LibraryAudio({ blob }: { blob: Blob }) {
+  const [url] = useState(() => URL.createObjectURL(blob));
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return <audio controls autoPlay className="w-full" src={url} />;
 }
 
 export function ProfilePanel() {

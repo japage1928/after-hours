@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { getMyBilling } from "@/lib/billing/billing-api";
+import { FREE_REMIXES_PER_MONTH } from "@/lib/billing/plans";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { USAGE_CHANGED_EVENT } from "@/lib/usage-events";
 import { cn } from "@/lib/utils";
 
 type Entitlement = {
@@ -23,16 +25,22 @@ export function UsageMeter() {
   useEffect(() => {
     if (!user || user.isDevFallback) return;
     let cancelled = false;
-    void (async () => {
+    async function refresh() {
       try {
         const mine = await getMyBilling();
         if (!cancelled) setEntitlement(mine.entitlement);
       } catch {
         /* ignore */
       }
-    })();
+    }
+    void refresh();
+    const onBump = () => {
+      void refresh();
+    };
+    window.addEventListener(USAGE_CHANGED_EVENT, onBump);
     return () => {
       cancelled = true;
+      window.removeEventListener(USAGE_CHANGED_EVENT, onBump);
     };
   }, [user]);
 
@@ -40,7 +48,7 @@ export function UsageMeter() {
 
   const credits = entitlement?.songCredits ?? 0;
   const used = entitlement?.remixesUsed ?? 0;
-  const limit = entitlement?.remixesLimit ?? 1;
+  const limit = entitlement?.remixesLimit ?? FREE_REMIXES_PER_MONTH;
   const remaining = Math.max(0, limit - used);
   const ratio = limit > 0 ? Math.min(1, used / limit) : 0;
   const period =

@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -9,6 +11,7 @@ import { ResultPlayer } from "@/components/result-player";
 import { AUDIO_FILE_ACCEPT } from "@/lib/audio-file";
 import { GROOVE_STYLES } from "@/lib/ai-beat";
 import { BOOTH_MODES, type BoothMode } from "@/lib/booth-mode";
+import { nextGrooveStyle, writeLibraryHandoff } from "@/lib/track-library";
 import { useStudioBooth, type LoadedTrack } from "@/lib/studio-store";
 import { cn } from "@/lib/utils";
 
@@ -44,17 +47,32 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
   const generate = useStudioBooth((s) => s.generate);
   const remix = useStudioBooth((s) => s.remix);
   const mashup = useStudioBooth((s) => s.mashup);
+  const lastLibrarySave = useStudioBooth((s) => s.lastLibrarySave);
+  const loadSourceFromBuffer = useStudioBooth((s) => s.loadSourceFromBuffer);
   const playResult = useStudioBooth((s) => s.playResult);
   const pauseResult = useStudioBooth((s) => s.pauseResult);
   const stopResult = useStudioBooth((s) => s.stopResult);
   const downloadResult = useStudioBooth((s) => s.downloadResult);
+  const navigate = useNavigate();
 
   const busy = status === "loading" || status === "generating";
-  const aceReady = capabilities?.aceStep ?? false;
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (!lastLibrarySave) return;
+    toast.success("Saved to your library", {
+      description: lastLibrarySave.title,
+      action: {
+        label: "Open",
+        onClick: () => {
+          void navigate({ to: "/projects" });
+        },
+      },
+    });
+  }, [lastLibrarySave, navigate]);
 
   useEffect(() => {
     if (mode !== "generate") {
@@ -67,7 +85,7 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
       ? prompt.trim().length >= 2
       : mode === "remix"
         ? Boolean(sourceA)
-        : Boolean(sourceA && sourceB);
+        : Boolean(sourceA && sourceB) || Boolean(sourceB);
 
   const cta =
     status === "generating"
@@ -77,13 +95,46 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
           ? "Generate song"
           : mode === "remix"
             ? `Remix as ${GROOVE_STYLES.find((g) => g.id === grooveStyle)?.label ?? grooveStyle}`
-            : `Mash ${sourceA?.name ?? "beats"} × ${sourceB?.name ?? "lyrics"}`
+            : sourceA && sourceB
+              ? `Mash ${sourceA.name} × ${sourceB.name}`
+              : "Mash lyrics with a local preview beat"
         : meta.actionIdle;
 
   function runPrimary() {
     if (mode === "generate") void generate();
     else if (mode === "remix") void remix();
-    else void mashup();
+    else if (sourceA && sourceB) void mashup();
+    else void mashup({ localBeat: true });
+  }
+
+  async function remixThisResult() {
+    if (!result) return;
+    await loadSourceFromBuffer("a", result.buffer, result.title);
+    void navigate({ to: "/remix" });
+  }
+
+  function tryAnotherStyle() {
+    const next = nextGrooveStyle(result?.style ?? grooveStyle);
+    setGrooveStyle(next);
+    if (mode === "generate") {
+      toast.message(`Style set to ${GROOVE_STYLES.find((g) => g.id === next)?.label ?? next}. Hit Generate song.`);
+      return;
+    }
+    if (result?.mode === "generate") {
+      writeLibraryHandoff({
+        kind: "generate-again",
+        prompt: result.prompt || prompt,
+        style: next,
+        lyrics,
+      });
+      void navigate({ to: "/generate" });
+      return;
+    }
+    if (result) {
+      void loadSourceFromBuffer("a", result.buffer, result.title).then(() => {
+        void navigate({ to: "/remix" });
+      });
+    }
   }
 
   return (
@@ -217,28 +268,40 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
       ) : null}
 
       {mode === "mashup" ? (
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
-          <TrackSlot
-            slot="a"
-            label="Beats"
-            hint="Instrumental / beat bed you own"
-            track={sourceA}
-          />
-          <TrackSlot
-            slot="b"
-            label="Lyrics"
-            hint="Vocal / lyrics track you own"
-            track={sourceB}
-          />
-        </div>
+        <>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
+            <TrackSlot
+              slot="a"
+              label="Beats"
+              hint="Instrumental / beat bed you own"
+              track={sourceA}
+            />
+            <TrackSlot
+              slot="b"
+              label="Lyrics"
+              hint="Vocal / lyrics track you own"
+              track={sourceB}
+            />
+          </div>
+          <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
+            <p className="text-xs font-medium tracking-widest text-muted uppercase">
+              Local preview beat (optional)
+            </p>
+            <p className="text-sm text-muted">
+              Only have vocals? Pick a style and mash over a labeled drum-bed.
+              That’s not your file and not ACE-Step.
+            </p>
+            <StylePicker value={grooveStyle} onChange={setGrooveStyle} />
+          </section>
+        </>
       ) : null}
 
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
         {mode === "generate"
-          ? "Full-song AI generation. Quality is ACE-Step, not Suno — we label the engine honestly."
+          ? "Full-song AI generation. Quality is ACE-Step, not Suno — we label the engine honestly. Your first two AI songs this month are included."
           : mode === "remix"
-            ? "Upload stays on your device. ACE-Step writes a new production; we bounce your song onto it for a full listen."
-            : "Beats on the left, lyrics/vocals on the right — both tracks you own. On iPhone: pick M4A or MP3 from Files. Apple Music catalog tracks can’t be uploaded."}
+            ? "Upload stays on your device. ACE-Step writes a new production when it’s configured; otherwise we bounce a labeled local drum-bed so you still leave with a listen."
+            : "Beats on the left, lyrics/vocals on the right — both tracks you own. Mashup never spends AI quota. On iPhone: pick M4A or MP3 from Files."}
       </p>
 
       <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">
@@ -254,14 +317,22 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
             <PlansGrid compact paywall />
           </div>
         ) : null}
-        {mode === "remix" && !aceReady && status === "error" ? (
+        {mode === "remix" && sourceA && !busy ? (
           <Button
             variant="secondary"
             className="w-full"
-            disabled={!sourceA || busy}
             onClick={() => void remix({ localPreview: true })}
           >
-            Preview with local drums (not ACE-Step)
+            Remix with local drums (no AI quota)
+          </Button>
+        ) : null}
+        {mode === "mashup" && sourceB && !sourceA && !busy ? (
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => void mashup({ localBeat: true })}
+          >
+            Mash lyrics with a local preview beat
           </Button>
         ) : null}
       </section>
@@ -275,7 +346,25 @@ export function StudioPanel({ mode }: { mode: BoothMode }) {
           onPause={pauseResult}
           onStop={stopResult}
           onDownload={downloadResult}
-        />
+        >
+          <Button
+            variant="secondary"
+            className="h-11"
+            onClick={() => void remixThisResult()}
+          >
+            Remix this
+          </Button>
+          <Button
+            variant="secondary"
+            className="h-11"
+            onClick={tryAnotherStyle}
+          >
+            Try another style
+          </Button>
+          <Button asChild variant="secondary" className="h-11">
+            <Link to="/projects">Library</Link>
+          </Button>
+        </ResultPlayer>
       ) : null}
 
       <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur-sm">

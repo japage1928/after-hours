@@ -208,6 +208,14 @@ export function UserButton() {
                 {page.label}
               </Link>
             ))}
+            <Link
+              to="/help"
+              role="menuitem"
+              className="block cursor-pointer bg-[#161614] px-3 py-2.5 text-sm text-fg hover:bg-[#1e1e1b]"
+              onClick={() => setOpen(false)}
+            >
+              Need help?
+            </Link>
             {authEnabled && !gateSession ? (
               <button
                 type="button"

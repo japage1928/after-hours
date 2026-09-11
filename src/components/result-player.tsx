@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Download, Pause, Play, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ export function ResultPlayer({
   onPause,
   onStop,
   onDownload,
+  children,
 }: {
   result: StudioResult;
   playing: boolean;
@@ -22,6 +24,7 @@ export function ResultPlayer({
   onPause: () => void;
   onStop: () => void;
   onDownload: () => void;
+  children?: ReactNode;
 }) {
   const engine =
     result.engine === "ace-step"
@@ -97,6 +100,9 @@ export function ResultPlayer({
           Download
         </Button>
       </div>
+      {children ? (
+        <div className="flex flex-wrap items-center gap-2">{children}</div>
+      ) : null}
     </section>
   );
 }

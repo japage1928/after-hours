@@ -13,8 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BillingRouteImport } from './routes/billing'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as GenerateRouteImport } from './routes/generate'
+import { Route as HelpRouteImport } from './routes/help'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as MashupRouteImport } from './routes/mashup'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -44,14 +45,19 @@ const BillingRoute = BillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GenerateRoute = GenerateRouteImport.update({
   id: '/generate',
   path: '/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MashupRoute = MashupRouteImport.update({
@@ -100,8 +106,9 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
-  '/login': typeof LoginRoute
   '/generate': typeof GenerateRoute
+  '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -116,8 +123,9 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
-  '/login': typeof LoginRoute
   '/generate': typeof GenerateRoute
+  '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -133,8 +141,9 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/billing': typeof BillingRoute
-  '/login': typeof LoginRoute
   '/generate': typeof GenerateRoute
+  '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/mashup': typeof MashupRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
@@ -151,8 +160,9 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/billing'
-    | '/login'
     | '/generate'
+    | '/help'
+    | '/login'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -167,8 +177,9 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/billing'
-    | '/login'
     | '/generate'
+    | '/help'
+    | '/login'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -183,8 +194,9 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/billing'
-    | '/login'
     | '/generate'
+    | '/help'
+    | '/login'
     | '/mashup'
     | '/pricing'
     | '/profile'
@@ -200,8 +212,9 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
   BillingRoute: typeof BillingRoute
-  LoginRoute: typeof LoginRoute
   GenerateRoute: typeof GenerateRoute
+  HelpRoute: typeof HelpRoute
+  LoginRoute: typeof LoginRoute
   MashupRoute: typeof MashupRoute
   PricingRoute: typeof PricingRoute
   ProfileRoute: typeof ProfileRoute
@@ -242,18 +255,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BillingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/generate': {
       id: '/generate'
       path: '/generate'
       fullPath: '/generate'
       preLoaderRoute: typeof GenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mashup': {
@@ -320,8 +340,9 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
   BillingRoute: BillingRoute,
-  LoginRoute: LoginRoute,
   GenerateRoute: GenerateRoute,
+  HelpRoute: HelpRoute,
+  LoginRoute: LoginRoute,
   MashupRoute: MashupRoute,
   PricingRoute: PricingRoute,
   ProfileRoute: ProfileRoute,

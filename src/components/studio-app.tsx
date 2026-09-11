@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { StudioPanel } from "@/components/studio-panel";
 import { UsageMeter } from "@/components/usage-meter";
+import { NeedHelpLink } from "@/components/need-help-link";
 import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
@@ -43,8 +44,12 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
           <div className="flex shrink-0 items-center gap-2">
             <UsageMeter />
             <Button asChild variant="secondary" className="h-11">
+              <Link to="/projects">Library</Link>
+            </Button>
+            <Button asChild variant="secondary" className="h-11">
               <Link to="/pricing">Plans</Link>
             </Button>
+            <NeedHelpLink className="hidden px-2 sm:inline" />
             <Button asChild variant="secondary" className="h-11">
               <Link to="/">Home</Link>
             </Button>
