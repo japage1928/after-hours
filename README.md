@@ -27,17 +27,26 @@ Open the app, hit **Mash**. Set `XAI_API_KEY` for AI mix plans and vocal writing
 
 TanStack Start, Vite, Tailwind v4, Zustand, Web Audio.
 
-## Deploy (Vercel + Supabase)
+## Deploy (free): Vercel Hobby + Neon Free
 
-A Supabase project **`after-hours`** (`qrhnoypojhkjkmzlhjfl`, `us-east-1`) is ready with the auth schema applied. The app already builds with the Vercel Nitro preset.
+Free path — no paid Supabase required.
+
+| Piece | Plan | Notes |
+| --- | --- | --- |
+| Hosting | [Vercel Hobby](https://vercel.com) (free) | Import this repo |
+| Database | [Neon Free](https://console.neon.tech) project **`after-hours`** (`frosty-dream-64435061`) | Auth schema already applied |
 
 ### Connect them
 
-1. Import the GitHub repo into [Vercel](https://vercel.com/new).
-2. In the Vercel project, open **Integrations → Supabase** (or [vercel.com/integrations/supabase](https://vercel.com/integrations/supabase)) and link the **after-hours** Supabase project. That syncs `POSTGRES_URL` (and related vars) into Vercel.
-3. Or set env vars manually in Vercel:
-   - `DATABASE_URL` — Supabase **Transaction pooler** URI (Dashboard → Connect), password filled in
-   - `XAI_API_KEY` — for mash plans / Write vocals
-4. Redeploy. Build runs `db:migrate` against that URL.
+1. Import the GitHub repo into [Vercel](https://vercel.com/new) (Hobby).
+2. In Neon → project **after-hours** → **Connect**, copy the **pooled** connection string.
+3. In Vercel → Project → **Settings → Environment Variables**, set:
+   - `DATABASE_URL` = that Neon URI
+   - `XAI_API_KEY` = your xAI key (optional; mash works without it)
+4. Redeploy. Build runs `db:migrate` against Neon.
 
-Local/preview still works without a database URL (embedded PGLite).
+Local/preview still works with no `DATABASE_URL` (embedded PGLite).
+
+### Stop the paid Supabase project
+
+Your Supabase org is **Pro**, so the earlier **`after-hours`** Supabase project (`qrhnoypojhkjkmzlhjfl`) is billable and can’t be paused from here. Delete it in the [Supabase dashboard](https://supabase.com/dashboard/project/qrhnoypojhkjkmzlhjfl/settings/general) to avoid Pro project charges. The app no longer depends on it.
