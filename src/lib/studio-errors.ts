@@ -1,6 +1,9 @@
 const SETUP_HINT =
   "Add REPLICATE_API_TOKEN on Vercel Production (replicate.com API token + a payment method). You do not need ACE_STEP_BASE_URL or Demucs. Without the token, Generate cannot run — we never fake a song.";
 
+const VIDEO_SETUP_HINT =
+  "Add XAI_API_KEY on this deploy (same key as music prompt translation). Video is Grok Imagine — there is no fake clip.";
+
 export function capabilityCopy(opts: {
   aceStep: boolean;
   owner: boolean;
@@ -42,6 +45,30 @@ export function engineLabel(opts: {
   }).engineLabel;
 }
 
+export function videoCapabilityCopy(opts: {
+  video: boolean;
+  owner: boolean;
+  model?: string;
+}): { engineLabel: string; setupHint: string | null } {
+  if (opts.video) {
+    return {
+      engineLabel:
+        "Prompt + QA by Grok / xAI; video by Grok Imagine (grok-imagine-video-1.5)",
+      setupHint: null,
+    };
+  }
+  if (opts.owner) {
+    return {
+      engineLabel: "Video is not configured on this deployment",
+      setupHint: VIDEO_SETUP_HINT,
+    };
+  }
+  return {
+    engineLabel: "AI video is temporarily unavailable",
+    setupHint: null,
+  };
+}
+
 export function humanizeStudioError(
   raw: string,
   opts?: { owner?: boolean },
@@ -49,7 +76,7 @@ export function humanizeStudioError(
   const owner = opts?.owner ?? false;
   const t = raw.toLowerCase();
   if (t.includes("quota") || t.includes("out of remixes") || t.includes("upgrade") || t.includes("free tier includes")) {
-    return "You're out of AI songs for this period. Pick a plan below to keep generating.";
+    return "You're out of AI jobs for this period. Pick a plan below to keep generating.";
   }
   if (t.includes("sign in") || t.includes("not signed")) {
     return "Sign in to generate AI songs. Your first two each month are free.";
@@ -79,7 +106,21 @@ export function humanizeStudioError(
       ? raw
       : "The music model is down or busy. Try again in a minute.";
   }
+  if (
+    t.includes("video needs xai") ||
+    t.includes("xai_api_key") ||
+    t.includes("imagine") ||
+    (t.includes("video") && (t.includes("not configured") || t.includes("rejected")))
+  ) {
+    if (owner) {
+      return "Video needs XAI_API_KEY (Grok Imagine). Add the key on this deploy, then retry.";
+    }
+    return "AI video is temporarily unavailable. Generate and mashup still work.";
+  }
   if (t.includes("xai") || t.includes("grok")) {
+    if (t.includes("video") || t.includes("clip") || t.includes("imagine")) {
+      return raw;
+    }
     return "Style helper is optional. Generate still runs from your prompt.";
   }
   return raw;

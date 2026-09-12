@@ -25,7 +25,7 @@ describe("pricing catalog", () => {
     assert.equal(PLANS.song.songCredits, 1);
     assert.equal(PLANS.song.name, "One song");
     assert.equal(FREE_REMIXES_PER_MONTH, 2);
-    assert.match(freeTierIncludesCopy(), /2 AI generates or remixes/);
+    assert.match(freeTierIncludesCopy(), /2 AI generates, remixes, or videos/);
     assert.match(freeTierBlockedReason(), /Mashups of tracks you own/);
     assert.equal(PLANS.basic.remixesPerWeek, 4);
     assert.equal(PLANS.basic.remixesPerMonth, 16);

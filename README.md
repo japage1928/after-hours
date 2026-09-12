@@ -1,6 +1,6 @@
 # After Hours
 
-**Generate an AI song in the browser** — prompt, play, download. That’s the product.
+**Two studios:** Songs (Generate / Remix / Mashup) and a separate Video page. Not one blended booth.
 
 ## Architecture (read this if you expected Demucs)
 
@@ -20,7 +20,7 @@ Cold signup → Generate booth → prompt/style → generate → play + download
 
 - **Generate** needs `REPLICATE_API_TOKEN` on Vercel. There is no fake song.
 - Free accounts get **2 AI generates per month**. Paywall after those jobs, then Stripe Checkout.
-- Finished generates save to **Library** (`/projects`).
+- Finished generates save to **Library** (`/projects`), labeled separately from Video clips.
 
 ## How Generate works (`/generate`)
 
@@ -34,6 +34,22 @@ Cold signup → Generate booth → prompt/style → generate → play + download
 
 UI copy when Replicate is live: **AI generation powered by ACE-Step (via Replicate)**.
 
+## How Video works (`/video`)
+
+Video is a **separate studio**, not a fourth Songs tab.
+
+1. Human prompt (duration 4 / 8 / 12s, aspect 16:9 · 9:16 · 1:1).
+2. **Grok** (`grok-4.5` via `XAI_API_KEY`) expands it into an Imagine prompt. Local fallback if chat is down.
+3. **Grok Imagine** (`grok-imagine-video-1.5`) renders the MP4. xAI can emit video bytes today — no second vendor.
+4. **Grok QA** of the prompt + output metadata. Unsafe / empty / off-brief → human error, no library success, quota refunded.
+5. Play + download. Clip saves under Library → Videos.
+
+Honest label: **Prompt + QA by Grok / xAI; video by Grok Imagine**.
+
+We did **not** wire the inactive n8n “Video Studio” workflows. In-app server functions + the existing `XAI_API_KEY` is the shorter path (same auth/quota rails, no extra webhook hop).
+
+Cost: Imagine is about **$0.08/sec** (`grok-imagine-video-1.5`). An 8s clip is ~$0.64 — more than an ACE-Step song. It still spends **one** shared AI job on the free/sub quota.
+
 ## Env vars
 
 | Var | Used for |
@@ -42,7 +58,8 @@ UI copy when Replicate is live: **AI generation powered by ACE-Step (via Replica
 | `ACE_STEP_REPLICATE_MODEL` | Optional. Default `fishaudio/ace-step-1.5`. |
 | `ACE_STEP_BASE_URL` | Optional self-hosted ACE-Step host (used instead of Replicate if set). **Not required.** |
 | `ACE_STEP_API_KEY` / `ACE_STEP_MODEL` | Optional for the self-hosted host only. |
-| `XAI_API_KEY` | Optional prompt translator; local briefs work without it. |
+| `XAI_API_KEY` | Optional for Songs prompt translation. **Required for Video** (prompt + Imagine + QA). |
+| `XAI_VIDEO_MODEL` | Optional. Default `grok-imagine-video-1.5`. |
 | `DATABASE_URL` / `POSTGRES_URL` | Supabase Postgres for Better Auth + billing. |
 | `VITE_AUTH_ENABLED` | `true` on Vercel so sign-in is on. |
 | `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` | Auth. |
@@ -71,7 +88,7 @@ Without `DATABASE_URL`, auth/session tables run on embedded PGLite. With Supabas
 
 ## Stack
 
-TanStack Start, Vite, Tailwind v4, Zustand, Web Audio, Better Auth → **Supabase Postgres**, Stripe, ACE-Step (Replicate), xAI.
+TanStack Start, Vite, Tailwind v4, Zustand, Web Audio, Better Auth → **Supabase Postgres**, Stripe, ACE-Step (Replicate), xAI Grok Imagine.
 
 ## Deploy: Vercel + Supabase
 

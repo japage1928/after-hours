@@ -66,33 +66,49 @@ export function LandingPage() {
               After Hours
             </h1>
             <p className="mt-5 max-w-lg text-base text-fg/80 sm:text-lg">
-              Generate an AI song in the browser — prompt, play, download.
-              AI generation powered by ACE-Step (via Replicate). Two songs free
-              this month.
+              Two separate studios. Songs are ACE-Step (via Replicate). Video
+              is Grok Imagine. Two AI jobs free this month.
             </p>
-            <Link
-              to={user ? "/generate" : "/login"}
-              search={user ? undefined : { next: "/generate" }}
-              className="mt-6 inline-flex h-12 items-center rounded-md bg-accent px-5 text-base font-medium text-accent-fg shadow-border transition-[transform,background-color] hover:brightness-110 active:scale-[0.98]"
-            >
-              Generate a song →
-            </Link>
           </div>
 
-          <div className="landing-rise-delay grid max-w-4xl gap-3 sm:grid-cols-3 sm:gap-4">
-            {BOOTH_MODE_ORDER.map((mode) => {
-              const meta = BOOTH_MODES[mode];
-              return (
-                <ModeChoice
-                  key={mode}
-                  mode={mode}
-                  signedIn={Boolean(user)}
-                  title={meta.landingTitle}
-                  blurb={meta.landingBlurb}
-                  path={meta.path}
-                />
-              );
-            })}
+          <div className="landing-rise-delay grid max-w-4xl gap-3 sm:grid-cols-2 sm:gap-4">
+            <LaneCard
+              eyebrow="Songs"
+              title="Write a song"
+              blurb="Generate, Remix, and Mashup — music booth only. ACE-Step via Replicate, not Suno."
+              cta="Open songs →"
+              href={user ? "/generate" : "/login"}
+              search={user ? undefined : { next: "/generate" }}
+            />
+            <LaneCard
+              eyebrow="Video"
+              title="Make a clip"
+              blurb="Prompt + QA by Grok / xAI; video by Grok Imagine. Its own page — not a song tab."
+              cta="Open video →"
+              href={user ? "/video" : "/login"}
+              search={user ? undefined : { next: "/video" }}
+            />
+          </div>
+
+          <div className="landing-rise-delay max-w-4xl">
+            <p className="mb-3 text-xs font-medium tracking-[0.22em] text-muted uppercase">
+              Songs booth
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+              {BOOTH_MODE_ORDER.map((mode) => {
+                const meta = BOOTH_MODES[mode];
+                return (
+                  <ModeChoice
+                    key={mode}
+                    mode={mode}
+                    signedIn={Boolean(user)}
+                    title={meta.landingTitle}
+                    blurb={meta.landingBlurb}
+                    path={meta.path}
+                  />
+                );
+              })}
+            </div>
           </div>
         </main>
       </section>
@@ -109,10 +125,9 @@ export function LandingPage() {
             Two AI songs free. Weekly batches when you go further.
           </h2>
           <p className="mt-3 max-w-xl text-sm text-muted sm:text-base">
-            Every account gets 2 AI generates or remixes per month — enough to
-            finish a real track on visit one. Paid plans unlock weekly batches
-            that reset every week. Mashup of two owned tracks is included — it
-            runs on your device.
+            Every account gets 2 AI jobs per month (Generate, Remix, or
+            Video). Paid plans unlock weekly batches that reset every week.
+            Mashup of two owned tracks is included — it runs on your device.
           </p>
           <div className="mt-10">
             <PlansGrid />
@@ -120,6 +135,53 @@ export function LandingPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function LaneCard({
+  eyebrow,
+  title,
+  blurb,
+  cta,
+  href,
+  search,
+}: {
+  eyebrow: string;
+  title: string;
+  blurb: string;
+  cta: string;
+  href: "/generate" | "/video" | "/login";
+  search?: { next: string };
+}) {
+  const className = cn(
+    "group flex min-h-[11rem] flex-col justify-end rounded-2xl bg-bg/60 p-5 shadow-border backdrop-blur-md transition-[transform,background-color] duration-200",
+    "hover:bg-bg/80 active:scale-[0.98]",
+  );
+  const body = (
+    <>
+      <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
+        {eyebrow}
+      </p>
+      <p className="font-display mt-2 text-4xl leading-none text-fg sm:text-5xl">
+        {title}
+      </p>
+      <p className="mt-2 text-sm text-fg/70">{blurb}</p>
+      <span className="mt-4 text-sm text-fg/90 transition-transform duration-200 group-hover:translate-x-0.5">
+        {cta}
+      </span>
+    </>
+  );
+  if (href === "/login") {
+    return (
+      <Link to="/login" search={search} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <Link to={href} className={className}>
+      {body}
+    </Link>
   );
 }
 

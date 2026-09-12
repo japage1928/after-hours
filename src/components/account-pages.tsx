@@ -22,11 +22,14 @@ import {
 } from "@/lib/billing/billing-api";
 import { type BoothMode, BOOTH_MODES } from "@/lib/booth-mode";
 import { readDefaultBooth, writeDefaultBooth } from "@/lib/prefs";
+import { ProductSwitcher } from "@/components/product-switcher";
 import {
   deleteSavedTrack,
   downloadExtension,
+  isVideoTrack,
   listSavedTracks,
   nextGrooveStyle,
+  partitionLibrary,
   writeLibraryHandoff,
   type SavedTrack,
 } from "@/lib/track-library";
@@ -59,6 +62,7 @@ export function AccountShell({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ProductSwitcher lane="songs" />
           <NeedHelpLink />
           <Button asChild variant="secondary">
             <Link to="/">Home</Link>
@@ -170,8 +174,8 @@ export function SettingsPanel() {
           </button>
         </div>
         <p className="text-xs text-subtle">
-          Landing still offers Generate, Remix, and Mashup. This only remembers
-          a preference for shortcuts on this browser.
+          This only remembers a Songs booth preference. Video is a separate
+          studio at /video — it is not a music tab.
         </p>
       </div>
     </Panel>
@@ -182,6 +186,7 @@ export function ProjectsPanel() {
   const [tracks, setTracks] = useState<SavedTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "songs" | "videos">("all");
 
   async function refresh() {
     try {
@@ -241,20 +246,42 @@ export function ProjectsPanel() {
     window.location.assign("/remix");
   }
 
+  const { songs, videos } = partitionLibrary(tracks ?? []);
+  const visible =
+    filter === "songs" ? songs : filter === "videos" ? videos : tracks ?? [];
+
   return (
     <Panel
       title="Library"
-      blurb="Completed Generate, Remix, and Mashup tracks on this device — play, download, or take another pass."
+      blurb="Songs and videos stay labeled. Songs are ACE-Step / mashup audio. Videos are Grok Imagine clips."
     >
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary" size="sm">
-          <Link to="/generate">Generate</Link>
+          <Link to="/generate">Songs</Link>
         </Button>
         <Button asChild variant="secondary" size="sm">
-          <Link to="/remix">Remix</Link>
+          <Link to="/video">Video</Link>
         </Button>
-        <Button asChild variant="secondary" size="sm">
-          <Link to="/mashup">Mashup</Link>
+        <Button
+          variant={filter === "all" ? "default" : "secondary"}
+          size="sm"
+          onClick={() => setFilter("all")}
+        >
+          All
+        </Button>
+        <Button
+          variant={filter === "songs" ? "default" : "secondary"}
+          size="sm"
+          onClick={() => setFilter("songs")}
+        >
+          Songs ({tracks ? songs.length : "—"})
+        </Button>
+        <Button
+          variant={filter === "videos" ? "default" : "secondary"}
+          size="sm"
+          onClick={() => setFilter("videos")}
+        >
+          Videos ({tracks ? videos.length : "—"})
         </Button>
       </div>
 
@@ -265,17 +292,32 @@ export function ProjectsPanel() {
       ) : tracks.length === 0 ? (
         <div className="flex flex-col gap-3 rounded-xl bg-surface-2 px-4 py-5 shadow-border">
           <p className="text-sm text-muted">
-            No finished tracks yet. Generate a song (or remix / mashup) and it
-            lands here automatically — play it again, download it, or tap Remix
-            this.
+            Nothing saved yet. Songs land from Generate / Remix / Mashup.
+            Clips land from the Video studio.
           </p>
-          <Button asChild>
-            <Link to="/generate">Generate your first song</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to="/generate">Generate a song</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/video">Make a clip</Link>
+            </Button>
+          </div>
         </div>
+      ) : visible.length === 0 ? (
+        <p className="text-sm text-muted">
+          No {filter === "videos" ? "videos" : "songs"} in this library yet.
+        </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {tracks.map((track) => (
+          {visible.map((track) => {
+            const video = isVideoTrack(track);
+            const engineLabel = video
+              ? "Grok Imagine"
+              : track.engine === "ace-step"
+                ? "ACE-Step"
+                : "Local mix";
+            return (
             <li
               key={track.id}
               className="flex flex-col gap-3 rounded-xl bg-surface-2 px-3 py-3 shadow-border"
@@ -284,15 +326,20 @@ export function ProjectsPanel() {
                 <div className="min-w-0">
                   <p className="truncate font-medium text-fg">{track.title}</p>
                   <p className="text-xs text-muted">
-                    {track.mode}
+                    {video ? "Video" : "Song"}
+                    {` · ${track.mode}`}
                     {track.bpm ? ` · ${Math.round(track.bpm)} BPM` : ""}
                     {` · ${formatTime(track.duration)}`}
-                    {` · ${track.engine === "ace-step" ? "ACE-Step" : "Local mix"}`}
+                    {` · ${engineLabel}`}
                   </p>
                 </div>
               </div>
               {playingId === track.id ? (
-                <LibraryAudio blob={track.blob} />
+                video ? (
+                  <LibraryVideo blob={track.blob} />
+                ) : (
+                  <LibraryAudio blob={track.blob} />
+                )
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -311,20 +358,24 @@ export function ProjectsPanel() {
                 >
                   Download
                 </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => remixThis(track)}
-                >
-                  Remix this
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => tryAnotherStyle(track)}
-                >
-                  Try another style
-                </Button>
+                {video ? null : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => remixThis(track)}
+                    >
+                      Remix this
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => tryAnotherStyle(track)}
+                    >
+                      Try another style
+                    </Button>
+                  </>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -343,7 +394,8 @@ export function ProjectsPanel() {
                 </Button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </Panel>
@@ -354,6 +406,20 @@ function LibraryAudio({ blob }: { blob: Blob }) {
   const [url] = useState(() => URL.createObjectURL(blob));
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return <audio controls autoPlay className="w-full" src={url} />;
+}
+
+function LibraryVideo({ blob }: { blob: Blob }) {
+  const [url] = useState(() => URL.createObjectURL(blob));
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <video
+      controls
+      autoPlay
+      playsInline
+      className="w-full overflow-hidden rounded-md bg-bg"
+      src={url}
+    />
+  );
 }
 
 export function ProfilePanel() {

@@ -16,8 +16,8 @@ function HelpPage() {
           </p>
           <h1 className="font-display text-4xl text-fg md:text-5xl">Need help?</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Generate an AI song in the browser. AI generation powered by
-            ACE-Step (via Replicate) — not Suno, not Demucs.
+            Two studios: Songs (ACE-Step via Replicate) and Video (Grok
+            Imagine). Not Suno. Not Demucs.
           </p>
         </div>
         <Button asChild variant="secondary">
@@ -26,15 +26,15 @@ function HelpPage() {
       </header>
 
       <section className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border">
-        <h2 className="font-display text-2xl text-fg">Try a mode</h2>
+        <h2 className="font-display text-2xl text-fg">Songs booth</h2>
         <ul className="flex flex-col gap-3 text-sm text-muted">
           <li>
             <Link to="/generate" className="font-medium text-fg underline-offset-4 hover:underline">
               Generate
             </Link>
             {" — "}
-            prompt + style, then play and download. Uses free AI quota
-            (2 / month). If AI studio is offline, mashup still works on-device.
+            prompt + style, then play and download. ACE-Step via Replicate.
+            Uses free AI quota (2 / month).
           </li>
           <li>
             <Link to="/remix" className="font-medium text-fg underline-offset-4 hover:underline">
@@ -57,10 +57,24 @@ function HelpPage() {
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border">
+        <h2 className="font-display text-2xl text-fg">Video studio</h2>
+        <p className="text-sm text-muted">
+          <Link to="/video" className="font-medium text-fg underline-offset-4 hover:underline">
+            Video
+          </Link>
+          {" — "}
+          its own page, not a Songs tab. Human prompt → Grok writes a video
+          prompt → Grok Imagine renders → Grok QA. Failed QA does not save a
+          library success or keep the quota. Needs{" "}
+          <code className="text-fg">XAI_API_KEY</code>.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-border">
         <h2 className="font-display text-2xl text-fg">Plans & library</h2>
         <p className="text-sm text-muted">
-          Every account includes two AI generates or remixes per month. Mashups
-          are included. Finished tracks save to{" "}
+          Every account includes two AI jobs per month (Generate, Remix, or
+          Video). Mashups are included. Finished songs and clips save to{" "}
           <Link to="/projects" className="text-fg underline-offset-4 hover:underline">
             Library
           </Link>{" "}

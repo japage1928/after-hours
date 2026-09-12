@@ -26,14 +26,19 @@ export const LIBRARY_STORE = "tracks";
 export const MAX_LIBRARY_TRACKS = 16;
 export const LIBRARY_HANDOFF_KEY = "after-hours.library.handoff.v1";
 
+export type LibraryMode = BoothMode | "video";
+export type LibraryEngine = "ace-step" | "local-mix" | "grok-imagine";
+export type LibraryKind = "audio" | "video";
+
 export type SavedTrack = {
   id: string;
   title: string;
-  mode: BoothMode;
+  mode: LibraryMode;
+  kind?: LibraryKind;
   createdAt: number;
   duration: number;
   bpm?: number;
-  engine: "ace-step" | "local-mix";
+  engine: LibraryEngine;
   summary: string;
   style?: GrooveStyle;
   prompt?: string;
@@ -141,12 +146,35 @@ export function audioBlobFromResult(
 }
 
 export function downloadExtension(mime: string): string {
+  if (mime.startsWith("video/")) return "mp4";
   if (mime.includes("wav")) return "wav";
   if (mime.includes("ogg")) return "ogg";
   if (mime.includes("mp4") || mime.includes("m4a") || mime.includes("aac")) {
     return "m4a";
   }
   return "mp3";
+}
+
+export function isVideoTrack(track: Pick<SavedTrack, "mode" | "kind" | "mime" | "engine">): boolean {
+  return (
+    track.mode === "video" ||
+    track.kind === "video" ||
+    track.engine === "grok-imagine" ||
+    track.mime.startsWith("video/")
+  );
+}
+
+export function partitionLibrary(tracks: SavedTrack[]): {
+  songs: SavedTrack[];
+  videos: SavedTrack[];
+} {
+  const songs: SavedTrack[] = [];
+  const videos: SavedTrack[] = [];
+  for (const track of tracks) {
+    if (isVideoTrack(track)) videos.push(track);
+    else songs.push(track);
+  }
+  return { songs, videos };
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -243,6 +271,53 @@ export async function saveStudioResult(
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error("Could not save track."));
+    });
+  } finally {
+    db.close();
+  }
+  return record;
+}
+
+export async function saveVideoClip(opts: {
+  title: string;
+  duration: number;
+  summary: string;
+  prompt?: string;
+  mime: string;
+  base64: string;
+}): Promise<SavedTrack> {
+  const mime = opts.mime || "video/mp4";
+  const record: SavedTrack = {
+    id: newTrackId(),
+    title: opts.title.slice(0, 120) || "After Hours clip",
+    mode: "video",
+    kind: "video",
+    createdAt: Date.now(),
+    duration: opts.duration,
+    engine: "grok-imagine",
+    summary: opts.summary,
+    prompt: opts.prompt,
+    mime,
+    blob: blobFromAceStepBase64(opts.base64, mime),
+  };
+  const db = await openDb();
+  try {
+    const existing = await reqAs(
+      db.transaction(LIBRARY_STORE, "readonly").objectStore(LIBRARY_STORE).getAll() as IDBRequest<
+        SavedTrack[]
+      >,
+    );
+    const evict = idsToEvict(
+      [...(existing ?? []).map((r) => ({ id: r.id, createdAt: r.createdAt })), record],
+      MAX_LIBRARY_TRACKS,
+    );
+    const tx = db.transaction(LIBRARY_STORE, "readwrite");
+    const store = tx.objectStore(LIBRARY_STORE);
+    for (const id of evict) store.delete(id);
+    store.put(record);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("Could not save clip."));
     });
   } finally {
     db.close();

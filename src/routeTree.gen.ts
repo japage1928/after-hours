@@ -22,6 +22,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RemixRouteImport } from './routes/remix'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as VideoRouteImport } from './routes/video'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 
@@ -90,6 +91,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VideoRoute = VideoRouteImport.update({
+  id: '/video',
+  path: '/video',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/video': typeof VideoRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/video': typeof VideoRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/projects': typeof ProjectsRoute
   '/remix': typeof RemixRoute
   '/settings': typeof SettingsRoute
+  '/video': typeof VideoRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/video'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/video'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/remix'
     | '/settings'
+    | '/video'
     | '/api/auth/$'
     | '/api/stripe/webhook'
   fileRoutesById: FileRoutesById
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   ProjectsRoute: typeof ProjectsRoute
   RemixRoute: typeof RemixRoute
   SettingsRoute: typeof SettingsRoute
+  VideoRoute: typeof VideoRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/video': {
+      id: '/video'
+      path: '/video'
+      fullPath: '/video'
+      preLoaderRoute: typeof VideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -349,6 +369,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsRoute: ProjectsRoute,
   RemixRoute: RemixRoute,
   SettingsRoute: SettingsRoute,
+  VideoRoute: VideoRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }

@@ -4,16 +4,21 @@ import {
   aceStepConfigured,
   replicateModelId,
 } from "@/lib/ace-step";
-import { capabilityCopy } from "@/lib/studio-errors";
+import { grokVideoConfigured, grokVideoModel } from "@/lib/grok-video";
+import { capabilityCopy, videoCapabilityCopy } from "@/lib/studio-errors";
 
 export type StudioCapabilities = {
   aceStep: boolean;
   xai: boolean;
+  video: boolean;
   owner: boolean;
   model: string;
+  videoModel: string;
   backend: "host" | "replicate" | "none";
   engineLabel: string;
   setupHint: string | null;
+  videoEngineLabel: string;
+  videoSetupHint: string | null;
 };
 
 async function sessionIsOwner(): Promise<boolean> {
@@ -35,20 +40,30 @@ export const getStudioCapabilities = createServerFn({ method: "GET" }).handler(
     const backend = aceStepBackend();
     const aceStep = aceStepConfigured();
     const xai = Boolean(process.env.XAI_API_KEY?.trim());
+    const video = grokVideoConfigured();
     const owner = await sessionIsOwner();
     const model =
       backend === "replicate"
         ? replicateModelId()
         : process.env.ACE_STEP_MODEL?.trim() || "acestep/ACE-Step-v1.5";
     const copy = capabilityCopy({ aceStep, owner, backend, model });
+    const videoCopy = videoCapabilityCopy({
+      video,
+      owner,
+      model: grokVideoModel(),
+    });
     return {
       aceStep,
       xai,
+      video,
       owner,
       model,
+      videoModel: grokVideoModel(),
       backend,
       engineLabel: copy.engineLabel,
       setupHint: copy.setupHint,
+      videoEngineLabel: videoCopy.engineLabel,
+      videoSetupHint: videoCopy.setupHint,
     };
   },
 );

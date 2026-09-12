@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
-import { StudioPanel } from "@/components/studio-panel";
+import { VideoPanel } from "@/components/video-panel";
 import { UsageMeter } from "@/components/usage-meter";
 import { NeedHelpLink } from "@/components/need-help-link";
 import { ProductSwitcher } from "@/components/product-switcher";
@@ -9,18 +9,11 @@ import { Button } from "@/components/ui/button";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import {
-  BOOTH_MODE_ORDER,
-  BOOTH_MODES,
-  type BoothMode,
-} from "@/lib/booth-mode";
 import { consumeCheckoutSuccessLocation } from "@/lib/checkout-return";
 import { bumpUsageMeter } from "@/lib/usage-events";
-import { cn } from "@/lib/utils";
 
-export function StudioApp({ mode }: { mode: BoothMode }) {
+export function VideoApp() {
   const user = useCurrentUser();
-  const meta = BOOTH_MODES[mode];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -29,7 +22,7 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
       window.location.search,
     );
     if (!cleaned) return;
-    toast.success("You're in. Generate is unlocked.");
+    toast.success("You're in. Video is unlocked.");
     bumpUsageMeter();
     const ticks = [800, 2500, 6000].map((ms) =>
       window.setTimeout(() => bumpUsageMeter(), ms),
@@ -58,11 +51,11 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
               After Hours
             </Link>
             <p className="font-display text-[1.75rem] leading-none tracking-tight text-fg sm:text-3xl md:text-4xl">
-              {meta.label}
+              Video
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ProductSwitcher lane="songs" />
+            <ProductSwitcher lane="video" />
             <UsageMeter />
             <Button asChild variant="secondary" className="h-11">
               <Link to="/projects">Library</Link>
@@ -82,32 +75,9 @@ export function StudioApp({ mode }: { mode: BoothMode }) {
             <UserButton />
           </div>
         </div>
-        <nav
-          aria-label="Studio modes"
-          className="mx-auto flex max-w-7xl gap-1 px-4 pb-3 md:px-8"
-        >
-          {BOOTH_MODE_ORDER.map((id) => {
-            const item = BOOTH_MODES[id];
-            const on = id === mode;
-            return (
-              <Link
-                key={id}
-                to={item.path}
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm transition-colors",
-                  on
-                    ? "bg-accent text-accent-fg"
-                    : "bg-surface-2 text-muted hover:text-fg",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
       </header>
 
-      <StudioPanel mode={mode} />
+      <VideoPanel />
 
       <Toaster
         theme="dark"
