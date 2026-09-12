@@ -159,8 +159,9 @@ export function VideoPanel() {
 
       <p className="px-1 text-xs leading-relaxed text-subtle sm:text-sm">
         {VIDEO_STUDIO.engineLine} Your first two AI jobs this month are
-        included (shared with Generate / Remix). Grok Imagine bills about
-        $0.08/sec — an 8s clip is ~$0.64.
+        included (shared with Generate / Remix). Grok Imagine bills $0.08/sec
+        — an 8s clip is ~$0.64. Renders can take a few minutes; we refund the
+        job if Imagine times out or QA rejects the clip.
       </p>
 
       <section className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface p-4 shadow-border md:p-5">

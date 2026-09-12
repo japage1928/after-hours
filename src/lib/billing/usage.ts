@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { getSql } from "@/lib/db";
 import {
   COST_PER_REMIX_CENTS,
+  COST_PER_VIDEO_SEC_CENTS,
   FREE_REMIXES_PER_MONTH,
   PLANS,
   planById,
@@ -427,6 +428,12 @@ export function estimateLyricsCostCents(): number {
 
 export function estimateMixCostCents(): number {
   return COST_PER_REMIX_CENTS;
+}
+
+/** Ledger amount for a Grok Imagine clip so the subscription dollar cap is real. */
+export function estimateVideoCostCents(durationSec: number): number {
+  const sec = Math.round(Math.min(15, Math.max(1, durationSec)));
+  return sec * COST_PER_VIDEO_SEC_CENTS;
 }
 
 export function estimateVocalCostCents(text: string): number {

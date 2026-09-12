@@ -146,6 +146,8 @@ export function audioBlobFromResult(
 }
 
 export function downloadExtension(mime: string): string {
+  if (mime.includes("webm")) return "webm";
+  if (mime.includes("quicktime") || mime.endsWith("/mov")) return "mov";
   if (mime.startsWith("video/")) return "mp4";
   if (mime.includes("wav")) return "wav";
   if (mime.includes("ogg")) return "ogg";

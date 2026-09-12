@@ -70,6 +70,20 @@ describe("video raw QA", () => {
     assert.match(v.reasons.join(" "), /unsafe/i);
   });
 
+  it("treats a moderation-fail empty payload as unsafe, not empty", () => {
+    const v = qaGrokVideoRaw(
+      result({
+        respectModeration: false,
+        videoBase64: "",
+        byteLength: 0,
+      }),
+    );
+    assert.equal(v.ok, false);
+    assert.match(v.reasons.join(" "), /unsafe/i);
+    assert.doesNotMatch(v.reasons.join(" "), /tiny|missing/i);
+    assert.match(humanVideoQaError(v.reasons), /safety/i);
+  });
+
   it("passes a large-enough mp4", () => {
     const v = qaGrokVideoRaw(result());
     assert.equal(v.ok, true);

@@ -57,6 +57,7 @@ describe("track library helpers", () => {
     assert.equal(downloadExtension("audio/mpeg"), "mp3");
     assert.equal(downloadExtension("audio/mp4"), "m4a");
     assert.equal(downloadExtension("video/mp4"), "mp4");
+    assert.equal(downloadExtension("video/webm"), "webm");
   });
 
   it("splits songs from video clips", () => {

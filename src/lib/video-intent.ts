@@ -12,6 +12,8 @@ import {
   generateWithGrokVideo,
   grokVideoConfigured,
   grokVideoModel,
+  isBoothVideoDuration,
+  lockVideoJobToBooth,
   type GrokVideoResult,
   type VideoJob,
 } from "@/lib/grok-video";
@@ -32,7 +34,12 @@ import {
 
 const VideoIntentSchema = z.object({
   prompt: z.string().min(2).max(2000),
-  durationSec: z.number().min(1).max(15).default(8),
+  durationSec: z
+    .number()
+    .refine((n) => isBoothVideoDuration(n), {
+      message: "Video length must be 4, 8, or 12 seconds.",
+    })
+    .default(8),
   aspectRatio: z.enum(VIDEO_ASPECTS).default("16:9"),
 });
 export type VideoIntentInput = z.infer<typeof VideoIntentSchema>;
@@ -129,13 +136,10 @@ Return JSON:
         );
         return {
           ok: true,
-          job: {
-            ...parsed,
-            durationSec: Math.round(
-              Math.min(15, Math.max(1, parsed.durationSec ?? data.durationSec)),
-            ),
+          job: lockVideoJobToBooth(parsed, {
+            durationSec: data.durationSec,
             aspectRatio: data.aspectRatio,
-          },
+          }),
           usedAi: true,
           videoReady: ready,
         };
@@ -147,14 +151,24 @@ Return JSON:
 
 export const runGrokVideoJob = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) =>
-    z
+  .validator((input: unknown) => {
+    const parsed = z
       .object({
         job: VideoJobSchema,
         brief: z.string().max(2000).optional(),
       })
-      .parse(input),
-  )
+      .parse(input);
+    if (!isBoothVideoDuration(parsed.job.durationSec)) {
+      throw new Error("Video length must be 4, 8, or 12 seconds.");
+    }
+    return {
+      ...parsed,
+      job: lockVideoJobToBooth(parsed.job, {
+        durationSec: parsed.job.durationSec,
+        aspectRatio: parsed.job.aspectRatio,
+      }),
+    };
+  })
   .handler(
     async ({
       data,
@@ -191,7 +205,7 @@ export const runGrokVideoJob = createServerFn({ method: "POST" })
 
       let reserved: Awaited<ReturnType<typeof chargeAfterVideo>> = null;
       try {
-        reserved = await chargeAfterVideo(context.userId);
+        reserved = await chargeAfterVideo(context.userId, data.job.durationSec);
       } catch (err) {
         return {
           ok: false,
