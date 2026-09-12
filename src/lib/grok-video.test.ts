@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  GROK_VIDEO_POLL_TIMEOUT_MS,
+  VERCEL_FUNCTION_BUDGET_MS,
   bytesFromBase64,
   clampVideoDuration,
   grokVideoConfigured,
   grokVideoModel,
   humanImagineFailure,
   imagineGenerateBody,
+  isBoothVideoDuration,
   isVideoAspect,
+  lockVideoJobToBooth,
   mimeFromVideoUrl,
   respectModerationFromPoll,
   XAI_VIDEO_GENERATIONS_URL,
@@ -80,6 +84,30 @@ describe("Grok video helpers", () => {
     assert.equal(respectModerationFromPoll(true), true);
     assert.equal(respectModerationFromPoll(undefined), true);
     assert.equal(respectModerationFromPoll(false), false);
+  });
+
+  it("keeps Imagine poll inside the Vercel function budget so refunds can run", () => {
+    assert.ok(GROK_VIDEO_POLL_TIMEOUT_MS < VERCEL_FUNCTION_BUDGET_MS);
+    assert.equal(GROK_VIDEO_POLL_TIMEOUT_MS, 240_000);
+  });
+
+  it("locks Grok chat output to the booth duration, aspect, and 720p", () => {
+    const locked = lockVideoJobToBooth(
+      {
+        prompt:
+          "A glowing crystal-powered rocket launching from the red dunes of Mars",
+        durationSec: 15,
+        aspectRatio: "1:1",
+        resolution: "1080p",
+        summary: "Mars rocket",
+      },
+      { durationSec: 4, aspectRatio: "16:9" },
+    );
+    assert.equal(locked.durationSec, 4);
+    assert.equal(locked.aspectRatio, "16:9");
+    assert.equal(locked.resolution, "720p");
+    assert.equal(isBoothVideoDuration(4), true);
+    assert.equal(isBoothVideoDuration(15), false);
   });
 
   it("maps documented Imagine error codes", () => {

@@ -55,6 +55,13 @@ export function qaVideoJob(job: VideoJob, brief?: string): QaVerdict {
 }
 
 export function qaGrokVideoRaw(result: GrokVideoResult): QaVerdict {
+  // Moderation-fail still returns an empty payload — speak safety, not "empty".
+  if (result.respectModeration === false) {
+    return {
+      ok: false,
+      reasons: ["Grok Imagine flagged the clip as unsafe."],
+    };
+  }
   const reasons: string[] = [];
   const bytes = result.byteLength || bytesFromBase64(result.videoBase64);
   if (!result.videoBase64 || result.videoBase64.length < 800) {
@@ -72,9 +79,6 @@ export function qaGrokVideoRaw(result: GrokVideoResult): QaVerdict {
     result.mime !== "application/octet-stream"
   ) {
     reasons.push(`Unexpected mime type: ${result.mime}`);
-  }
-  if (result.respectModeration === false) {
-    reasons.push("Grok Imagine flagged the clip as unsafe.");
   }
   if (result.durationSec < 1 || result.durationSec > 16) {
     reasons.push("Rendered duration out of range.");
@@ -167,14 +171,17 @@ export function mergeVerdicts(...parts: QaVerdict[]): QaVerdict {
 
 export function humanVideoQaError(reasons: string[]): string {
   const first = reasons[0] || "Grok rejected this video.";
-  if (/minor/i.test(first)) return first;
-  if (/unsafe|moderation|safety/i.test(first)) {
+  const blob = reasons.join(" ");
+  if (/minor/i.test(blob)) {
+    return reasons.find((r) => /minor/i.test(r)) || first;
+  }
+  if (/unsafe|moderation|safety/i.test(blob)) {
     return "Grok rejected this clip for safety. Try a different brief.";
   }
-  if (/tiny|missing|empty/i.test(first)) {
+  if (/tiny|missing|empty/i.test(blob)) {
     return "The video came back empty. Nothing was saved — try again.";
   }
-  if (/off-brief|ignore|mismatch|not reflect/i.test(first)) {
+  if (/off-brief|ignore|mismatch|not reflect/i.test(blob)) {
     return `Grok said this clip missed your brief (${first}). Nothing was saved.`;
   }
   return first;

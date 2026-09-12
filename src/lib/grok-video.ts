@@ -31,6 +31,14 @@ export const DEFAULT_VIDEO_RESOLUTION = "720p";
 export const DEFAULT_VIDEO_DURATION_SEC = 8;
 export const DEFAULT_VIDEO_ASPECT: VideoAspect = "16:9";
 
+/**
+ * Leave ~60s after this poll for download + Grok QA + JSON before Vercel’s
+ * default 300s function budget. A 600s poll (xAI SDK default) outlives the
+ * platform kill and skips the quota refund.
+ */
+export const GROK_VIDEO_POLL_TIMEOUT_MS = 240_000;
+export const VERCEL_FUNCTION_BUDGET_MS = 300_000;
+
 export const VideoJobSchema = z.object({
   prompt: z.string().min(12).max(2000),
   durationSec: z.number().min(1).max(15),
@@ -92,6 +100,30 @@ export function imagineGenerateBody(
 
 export function clampVideoDuration(sec: number): number {
   return Math.round(Math.min(15, Math.max(1, sec)));
+}
+
+export function isBoothVideoDuration(sec: number): sec is VideoDurationSec {
+  return (VIDEO_DURATIONS as readonly number[]).includes(sec);
+}
+
+/**
+ * Grok chat may invent a longer clip or 1080p. Lock to the booth so Imagine
+ * cost and render time stay what the user picked.
+ */
+export function lockVideoJobToBooth(
+  job: VideoJob,
+  booth: { durationSec: number; aspectRatio: VideoAspect },
+): VideoJob {
+  return {
+    ...job,
+    durationSec: isBoothVideoDuration(booth.durationSec)
+      ? booth.durationSec
+      : DEFAULT_VIDEO_DURATION_SEC,
+    aspectRatio: isVideoAspect(booth.aspectRatio)
+      ? booth.aspectRatio
+      : DEFAULT_VIDEO_ASPECT,
+    resolution: DEFAULT_VIDEO_RESOLUTION,
+  };
 }
 
 /** xAI returns this on a completed clip. Missing flag → treat as passed. */
@@ -207,7 +239,7 @@ export async function startGrokVideo(
 export async function pollGrokVideo(
   requestId: string,
   env: EnvBag = process.env,
-  timeoutMs = 600_000,
+  timeoutMs = GROK_VIDEO_POLL_TIMEOUT_MS,
 ): Promise<VideoPollBody> {
   const apiKey = xaiApiKey(env);
   if (!apiKey) {
@@ -287,7 +319,20 @@ export async function generateWithGrokVideo(
   env: EnvBag = process.env,
 ): Promise<GrokVideoResult> {
   const { requestId } = await startGrokVideo(job, env);
+  console.info("[grok-video] started", {
+    requestId,
+    durationSec: job.durationSec,
+    aspectRatio: job.aspectRatio,
+    resolution: job.resolution ?? DEFAULT_VIDEO_RESOLUTION,
+    model: grokVideoModel(env),
+  });
   const polled = await pollGrokVideo(requestId, env);
+  console.info("[grok-video] polled", {
+    requestId,
+    status: polled.status,
+    respectModeration: polled.video?.respect_moderation,
+    duration: polled.video?.duration,
+  });
   if (polled.status === "failed" || polled.status === "expired") {
     throw new Error(humanImagineFailure(polled.error));
   }

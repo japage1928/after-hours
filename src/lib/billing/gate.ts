@@ -4,6 +4,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import {
   estimateLyricsCostCents,
   estimateMixCostCents,
+  estimateVideoCostCents,
   estimateVocalCostCents,
   getEntitlement,
   hasOpenSongBundle,
@@ -94,17 +95,19 @@ export async function chargeAfterMix(userId: string): Promise<void> {
 /** Reserve one AI job before Grok Imagine runs. Refund if QA/render fails. */
 export async function chargeAfterVideo(
   userId: string,
+  durationSec: number,
 ): Promise<UsageRecord | null> {
   if (process.env.VITE_AUTH_ENABLED === "false" || userId === "dev-user") {
     return null;
   }
   const email = await currentUserEmail(userId);
   if (isAdminEmail(email)) return null;
+  const seconds = Math.round(Math.min(15, Math.max(1, durationSec)));
   return recordUsage({
     userId,
     kind: "mix_plan",
-    amountCents: estimateMixCostCents(),
-    description: "AI video generation (Grok Imagine)",
+    amountCents: estimateVideoCostCents(seconds),
+    description: `AI video generation (Grok Imagine, ${seconds}s)`,
     preferSongCredit: true,
   });
 }

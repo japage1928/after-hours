@@ -200,6 +200,13 @@ export default defineConfig(({ command, isPreview }) => ({
       ? [
           nitro({
             preset: "vercel",
+            // Hobby/default Fluid budget is 300s. Video poll is capped at 240s
+            // so a timeout can refund quota instead of dying at the platform kill.
+            vercel: {
+              functions: {
+                maxDuration: 300,
+              },
+            },
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

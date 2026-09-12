@@ -9,7 +9,7 @@ import { humanizeStudioError } from "@/lib/studio-errors";
 import { bumpUsageMeter } from "@/lib/usage-events";
 import { interpretVideoIntent, runGrokVideoJob } from "@/lib/video-intent";
 import { VIDEO_STUDIO } from "@/lib/video-booth";
-import { saveVideoClip } from "@/lib/track-library";
+import { downloadExtension, saveVideoClip } from "@/lib/track-library";
 
 export type VideoStatus = "idle" | "generating" | "ready" | "error";
 
@@ -136,6 +136,16 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
       return;
     }
     const gen = ++jobGen;
+    const progressTimers: number[] = [];
+    const armProgress = (ms: number, statusText: string) => {
+      progressTimers.push(
+        window.setTimeout(() => {
+          if (gen !== jobGen) return;
+          if (get().status !== "generating") return;
+          set({ statusText });
+        }, ms),
+      );
+    };
     revokeObjectUrl();
     set({
       status: "generating",
@@ -169,12 +179,21 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
       }
       set({
         statusText: intent.usedAi
-          ? `Prompt ready — ${intent.job.summary}`
-          : `Local prompt — ${intent.job.summary}`,
+          ? `Prompt ready — ${intent.job.summary}. Grok Imagine is rendering…`
+          : `Local prompt — ${intent.job.summary}. Grok Imagine is rendering…`,
       });
-      set({
-        statusText: "Grok Imagine is rendering — Grok will QA before we show it…",
-      });
+      armProgress(
+        8_000,
+        "Grok Imagine is rendering — this often takes a minute or two…",
+      );
+      armProgress(
+        45_000,
+        "Still rendering. Longer clips can take a few minutes…",
+      );
+      armProgress(
+        120_000,
+        "Still waiting on Grok Imagine, then Grok QA…",
+      );
       const run = await runGrokVideoJob({
         data: { job: intent.job, brief },
       });
@@ -204,7 +223,7 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
       };
       set({
         status: "ready",
-        statusText: "Ready — play or download. Saved to your library.",
+        statusText: "Ready — play or download. Saving to your library…",
         error: null,
         result,
       });
@@ -218,9 +237,15 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
           mime,
           base64: run.result.videoBase64,
         });
-        set({ lastLibrarySave: { id: saved.id, title: saved.title } });
+        set({
+          lastLibrarySave: { id: saved.id, title: saved.title },
+          statusText: "Ready — play or download. Saved to your library.",
+        });
       } catch {
-        /* IndexedDB is best-effort — play/download still work. */
+        set({
+          statusText:
+            "Ready — play or download. Couldn’t save to this browser’s library — download a copy.",
+        });
       }
     } catch (err) {
       if (gen !== jobGen) return;
@@ -231,6 +256,8 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
         ),
         statusText: "Video generation failed.",
       });
+    } finally {
+      for (const id of progressTimers) window.clearTimeout(id);
     }
   },
 
@@ -244,7 +271,7 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${slug}.mp4`;
+    a.download = `${slug}.${downloadExtension(result.mime)}`;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 4_000);
   },

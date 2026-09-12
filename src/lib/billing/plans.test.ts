@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   COST_PER_REMIX_CENTS,
+  COST_PER_VIDEO_SEC_CENTS,
   FREE_REMIXES_PER_MONTH,
   PLANS,
   formatUsd,
@@ -34,9 +35,16 @@ describe("pricing catalog", () => {
     assert.equal(PLANS.pro.remixesPerWeek, 12);
     assert.equal(PLANS.pro.remixesPerMonth, 48);
     assert.equal(COST_PER_REMIX_CENTS, 19);
+    assert.equal(COST_PER_VIDEO_SEC_CENTS, 8);
     for (const plan of Object.values(PLANS)) {
       assert.equal(remixCapWithinBudget(plan), true);
     }
+  });
+
+  it("records Imagine at $0.08/sec so the subscription dollar cap can fire", () => {
+    assert.equal(8 * COST_PER_VIDEO_SEC_CENTS, 64);
+    assert.equal(12 * COST_PER_VIDEO_SEC_CENTS, 96);
+    assert.ok(4 * 12 * COST_PER_VIDEO_SEC_CENTS > PLANS.basic.usageBudgetCents);
   });
 
   it("formats money and resolves env price ids", () => {

@@ -40,7 +40,7 @@ Video is a **separate studio**, not a fourth Songs tab.
 
 1. Human prompt (duration 4 / 8 / 12s, aspect 16:9 · 9:16 · 1:1).
 2. **Grok** (`grok-4.5` via `XAI_API_KEY`) expands it into an Imagine prompt. Local fallback if chat is down.
-3. **Grok Imagine** (`grok-imagine-video-1.5`) via `POST https://api.x.ai/v1/videos/generations`, then poll `GET /v1/videos/{request_id}` until done. Docs: https://docs.x.ai/developers/model-capabilities/video/generation
+3. **Grok Imagine** (`grok-imagine-video-1.5`) via `POST https://api.x.ai/v1/videos/generations`, then poll `GET /v1/videos/{request_id}` until done (capped at 240s so a Vercel timeout can refund quota). Docs: https://docs.x.ai/developers/model-capabilities/video/generation
 4. **Grok QA** of the prompt + result metadata (and `respect_moderation` if returned). Unsafe / empty / off-brief → human error, no library success, quota refunded.
 5. Play + download. Clip saves under Library → Videos.
 
@@ -48,7 +48,7 @@ Honest label: **Prompt + QA by Grok / xAI; video by Grok Imagine**.
 
 We did **not** wire the inactive n8n “Video Studio” workflows. In-app server functions + the existing `XAI_API_KEY` is the shorter path (same auth/quota rails, no extra webhook hop).
 
-Cost: Imagine is about **$0.08/sec** (`grok-imagine-video-1.5`). An 8s clip is ~$0.64 — more than an ACE-Step song. It still spends **one** shared AI job on the free/sub quota.
+Cost: Imagine is **$0.08/sec** (`grok-imagine-video-1.5`). An 8s clip is ~$0.64 — more than an ACE-Step song. Duration and 720p are locked to the booth so Grok chat cannot inflate the render. The ledger records that Imagine cost (not the 19¢ remix estimate) so the subscription dollar cap can fire. It still spends **one** shared AI job on the free/sub quota.
 
 ## Env vars
 

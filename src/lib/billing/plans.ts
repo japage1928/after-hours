@@ -36,6 +36,9 @@ export type Plan = {
 /** ~30%-of-revenue unit cost used to size remix caps. */
 export const COST_PER_REMIX_CENTS = 19;
 
+/** Official grok-imagine-video-1.5 output rate ($0.08/sec). */
+export const COST_PER_VIDEO_SEC_CENTS = 8;
+
 /** Signed-in users with no plan get this many AI generates/remixes per calendar month. */
 export const FREE_REMIXES_PER_MONTH = 2;
 
