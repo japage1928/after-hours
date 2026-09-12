@@ -59,6 +59,21 @@ describe("humanizeStudioError", () => {
     assert.match(humanizeStudioError("ACE-Step failed (503)"), /down or busy/i);
   });
 
+  it("does not swallow Grok Imagine render or QA errors as a missing key", () => {
+    assert.match(
+      humanizeStudioError("Grok Imagine blocked this clip for safety."),
+      /safety/i,
+    );
+    assert.match(
+      humanizeStudioError("Grok Imagine is busy. Try again in a minute."),
+      /busy/i,
+    );
+    assert.doesNotMatch(
+      humanizeStudioError("Grok Imagine failed (400): Prompt cannot be empty."),
+      /music model/i,
+    );
+  });
+
   it("explains oversized uploads", () => {
     assert.match(humanizeStudioError("Keep each track under 40 MB."), /40 MB/);
   });

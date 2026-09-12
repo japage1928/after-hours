@@ -101,7 +101,11 @@ export function humanizeStudioError(
   if (t.includes("timed out") || t.includes("timeout")) {
     return "The model took too long. Try a shorter duration or retry in a minute.";
   }
-  if (/\b(502|503|504)\b/.test(t) || t.includes("failed (")) {
+  if (
+    (/\b(502|503|504)\b/.test(t) || t.includes("failed (")) &&
+    !t.includes("imagine") &&
+    !t.includes("video")
+  ) {
     return owner
       ? raw
       : "The music model is down or busy. Try again in a minute.";
@@ -109,8 +113,7 @@ export function humanizeStudioError(
   if (
     t.includes("video needs xai") ||
     t.includes("xai_api_key") ||
-    t.includes("imagine") ||
-    (t.includes("video") && (t.includes("not configured") || t.includes("rejected")))
+    (t.includes("video") && t.includes("not configured"))
   ) {
     if (owner) {
       return "Video needs XAI_API_KEY (Grok Imagine). Add the key on this deploy, then retry.";

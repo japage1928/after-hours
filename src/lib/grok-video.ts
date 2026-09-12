@@ -3,12 +3,22 @@ import { z } from "zod";
 /**
  * Thin Grok Imagine video client (xAI REST).
  *
- * xAI can render video today: POST /v1/videos/generations → poll
- * GET /v1/videos/{request_id} → download the returned MP4 URL.
- * Prompt expansion + QA stay on grok-4.5 chat. There is no second
- * video vendor and no n8n hop — inactive Video Studio workflows
- * would add a webhook without simplifying this path.
+ * Docs: https://docs.x.ai/developers/model-capabilities/video/generation
+ *
+ * Text-to-video only: POST /v1/videos/generations with
+ * grok-imagine-video-1.5 → poll GET /v1/videos/{request_id} until
+ * done / failed / expired → download video.url. Prompt expansion
+ * and QA stay on grok-4.5 chat. No second video vendor, no n8n hop.
  */
+
+export const XAI_VIDEO_DOCS =
+  "https://docs.x.ai/developers/model-capabilities/video/generation";
+export const XAI_VIDEO_GENERATIONS_URL =
+  "https://api.x.ai/v1/videos/generations";
+
+export function xaiVideoStatusUrl(requestId: string): string {
+  return `https://api.x.ai/v1/videos/${encodeURIComponent(requestId)}`;
+}
 
 export const VIDEO_ASPECTS = ["16:9", "9:16", "1:1"] as const;
 export type VideoAspect = (typeof VIDEO_ASPECTS)[number];
@@ -60,8 +70,60 @@ export function grokVideoConfigured(env: EnvBag = process.env): boolean {
   return Boolean(xaiApiKey(env));
 }
 
+/** Documented Imagine text-to-video body. Duration is 1–15s. */
+export function imagineGenerateBody(
+  job: VideoJob,
+  env: EnvBag = process.env,
+): {
+  model: string;
+  prompt: string;
+  duration: number;
+  aspect_ratio: VideoAspect;
+  resolution: "480p" | "720p" | "1080p";
+} {
+  return {
+    model: grokVideoModel(env),
+    prompt: job.prompt,
+    duration: clampVideoDuration(job.durationSec),
+    aspect_ratio: job.aspectRatio,
+    resolution: job.resolution ?? DEFAULT_VIDEO_RESOLUTION,
+  };
+}
+
 export function clampVideoDuration(sec: number): number {
   return Math.round(Math.min(15, Math.max(1, sec)));
+}
+
+/** xAI returns this on a completed clip. Missing flag → treat as passed. */
+export function respectModerationFromPoll(flag: boolean | undefined): boolean {
+  return flag !== false;
+}
+
+export function humanImagineFailure(error?: {
+  code?: string;
+  message?: string;
+}): string {
+  const message = error?.message?.trim();
+  switch (error?.code) {
+    case "invalid_argument":
+      return (
+        message ||
+        "Grok Imagine rejected this request. Try a different prompt or settings."
+      );
+    case "permission_denied":
+      return "This XAI_API_KEY cannot use Grok Imagine video.";
+    case "failed_precondition":
+      return (
+        message ||
+        "Grok Imagine cannot use these settings. Try 720p or a shorter clip."
+      );
+    case "service_unavailable":
+      return "Grok Imagine is busy. Try again in a minute.";
+    case "internal_error":
+      return "Grok Imagine hit an internal error. Try again.";
+    default:
+      return message || "Grok Imagine failed to render the video.";
+  }
 }
 
 export function isVideoAspect(value: string): value is VideoAspect {
@@ -109,17 +171,11 @@ export async function startGrokVideo(
   if (!apiKey) {
     throw new Error("Video needs XAI_API_KEY. Add it on this deploy, then retry.");
   }
-  const res = await fetch("https://api.x.ai/v1/videos/generations", {
+  const res = await fetch(XAI_VIDEO_GENERATIONS_URL, {
     method: "POST",
     headers: xaiHeaders(apiKey),
     signal: AbortSignal.timeout(30_000),
-    body: JSON.stringify({
-      model: grokVideoModel(env),
-      prompt: job.prompt,
-      duration: clampVideoDuration(job.durationSec),
-      aspect_ratio: job.aspectRatio,
-      resolution: job.resolution ?? DEFAULT_VIDEO_RESOLUTION,
-    }),
+    body: JSON.stringify(imagineGenerateBody(job, env)),
   });
   const text = await res.text().catch(() => "");
   let json: { request_id?: string; error?: { message?: string } } = {};
@@ -151,22 +207,19 @@ export async function startGrokVideo(
 export async function pollGrokVideo(
   requestId: string,
   env: EnvBag = process.env,
-  timeoutMs = 240_000,
+  timeoutMs = 600_000,
 ): Promise<VideoPollBody> {
   const apiKey = xaiApiKey(env);
   if (!apiKey) {
     throw new Error("Video needs XAI_API_KEY. Add it on this deploy, then retry.");
   }
   const started = Date.now();
-  let delay = 3_000;
+  let delay = 5_000;
   while (Date.now() - started < timeoutMs) {
-    const res = await fetch(
-      `https://api.x.ai/v1/videos/${encodeURIComponent(requestId)}`,
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(30_000),
-      },
-    );
+    const res = await fetch(xaiVideoStatusUrl(requestId), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(30_000),
+    });
     const text = await res.text().catch(() => "");
     let json: VideoPollBody = {};
     try {
@@ -236,12 +289,24 @@ export async function generateWithGrokVideo(
   const { requestId } = await startGrokVideo(job, env);
   const polled = await pollGrokVideo(requestId, env);
   if (polled.status === "failed" || polled.status === "expired") {
-    throw new Error(
-      polled.error?.message || "Grok Imagine failed to render the video.",
-    );
+    throw new Error(humanImagineFailure(polled.error));
   }
-  if (polled.video?.respect_moderation === false) {
-    throw new Error("Grok Imagine blocked this clip for safety.");
+  const respectModeration = respectModerationFromPoll(
+    polled.video?.respect_moderation,
+  );
+  // Moderation fail still returns metadata so Grok QA can reject before success.
+  if (!respectModeration) {
+    return {
+      videoBase64: "",
+      mime: "video/mp4",
+      durationSec: polled.video?.duration ?? job.durationSec,
+      prompt: job.prompt,
+      summary: job.summary,
+      requestId,
+      model: polled.model || grokVideoModel(env),
+      respectModeration: false,
+      byteLength: 0,
+    };
   }
   const url = polled.video?.url;
   if (!url) {
@@ -255,6 +320,6 @@ export async function generateWithGrokVideo(
     summary: job.summary,
     requestId,
     model: polled.model || grokVideoModel(env),
-    respectModeration: true,
+    respectModeration,
   };
 }

@@ -5,8 +5,13 @@ import {
   clampVideoDuration,
   grokVideoConfigured,
   grokVideoModel,
+  humanImagineFailure,
+  imagineGenerateBody,
   isVideoAspect,
   mimeFromVideoUrl,
+  respectModerationFromPoll,
+  XAI_VIDEO_GENERATIONS_URL,
+  xaiVideoStatusUrl,
 } from "./grok-video.ts";
 import { fallbackVideoJob } from "./grok-video-prompt.ts";
 
@@ -42,6 +47,54 @@ describe("Grok video helpers", () => {
     assert.equal(bytesFromBase64(""), 0);
     assert.equal(bytesFromBase64("aaaa"), 3);
     assert.equal(bytesFromBase64("aaa="), 2);
+  });
+
+  it("builds the documented Imagine text-to-video body", () => {
+    const body = imagineGenerateBody({
+      prompt:
+        "A glowing crystal-powered rocket launching from the red dunes of Mars",
+      durationSec: 10,
+      aspectRatio: "16:9",
+      resolution: "720p",
+      summary: "Mars rocket",
+    });
+    assert.deepEqual(body, {
+      model: "grok-imagine-video-1.5",
+      prompt:
+        "A glowing crystal-powered rocket launching from the red dunes of Mars",
+      duration: 10,
+      aspect_ratio: "16:9",
+      resolution: "720p",
+    });
+    assert.equal(
+      XAI_VIDEO_GENERATIONS_URL,
+      "https://api.x.ai/v1/videos/generations",
+    );
+    assert.equal(
+      xaiVideoStatusUrl("d97415a1-5796-b7ec-379f-4e6819e08fdf"),
+      "https://api.x.ai/v1/videos/d97415a1-5796-b7ec-379f-4e6819e08fdf",
+    );
+  });
+
+  it("passes the xAI respect_moderation flag through as-is", () => {
+    assert.equal(respectModerationFromPoll(true), true);
+    assert.equal(respectModerationFromPoll(undefined), true);
+    assert.equal(respectModerationFromPoll(false), false);
+  });
+
+  it("maps documented Imagine error codes", () => {
+    assert.match(
+      humanImagineFailure({
+        code: "invalid_argument",
+        message: "Prompt cannot be empty.",
+      }),
+      /cannot be empty/i,
+    );
+    assert.match(
+      humanImagineFailure({ code: "service_unavailable" }),
+      /busy/i,
+    );
+    assert.match(humanImagineFailure({ code: "internal_error" }), /internal/i);
   });
 });
 

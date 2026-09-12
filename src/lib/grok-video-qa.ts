@@ -91,7 +91,13 @@ export async function qaVideoResultFit(opts: {
   job: VideoJob;
   result: Pick<
     GrokVideoResult,
-    "durationSec" | "mime" | "byteLength" | "respectModeration" | "summary"
+    | "durationSec"
+    | "mime"
+    | "byteLength"
+    | "respectModeration"
+    | "summary"
+    | "requestId"
+    | "model"
   >;
   apiKey?: string;
 }): Promise<QaVerdict> {
@@ -115,8 +121,8 @@ export async function qaVideoResultFit(opts: {
         messages: [
           {
             role: "system",
-            content: `You QA a text-to-video job. Return JSON {"ok":boolean,"reason":"short"}.
-ok=false only if the result is unsafe, empty/tiny, or clearly ignores the user brief.
+            content: `You QA a Grok Imagine text-to-video job. Return JSON {"ok":boolean,"reason":"short"}.
+ok=false only if the result is unsafe, empty/tiny, respect_moderation is false, or the clip clearly ignores the user brief.
 Be lenient on wording. Do not reject for style taste.`,
           },
           {
@@ -127,7 +133,9 @@ Summary: ${opts.result.summary}
 Duration: ${opts.result.durationSec}s (asked ${opts.job.durationSec}s)
 Mime: ${opts.result.mime}
 Bytes: ${opts.result.byteLength}
-Respects moderation: ${opts.result.respectModeration}`,
+Model: ${opts.result.model}
+Request id: ${opts.result.requestId}
+xAI respect_moderation: ${opts.result.respectModeration}`,
           },
         ],
       }),

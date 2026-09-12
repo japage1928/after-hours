@@ -24,8 +24,10 @@ import {
 } from "@/lib/grok-video-qa";
 
 /**
- * Human prompt → Grok expands it → Grok Imagine renders → Grok QA.
- * Quota is reserved before render and refunded if QA or generation fails.
+ * Human prompt → Grok chat expands it → Grok Imagine renders
+ * (POST /v1/videos/generations, poll GET /v1/videos/{id}) → Grok QA
+ * of prompt + metadata + respect_moderation. Quota reserved before
+ * render and refunded if QA or generation fails.
  */
 
 const VideoIntentSchema = z.object({

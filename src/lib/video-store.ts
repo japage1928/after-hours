@@ -172,7 +172,9 @@ export const useVideoStudio = create<VideoState>((set, get) => ({
           ? `Prompt ready — ${intent.job.summary}`
           : `Local prompt — ${intent.job.summary}`,
       });
-      set({ statusText: "Grok Imagine is rendering the clip…" });
+      set({
+        statusText: "Grok Imagine is rendering — Grok will QA before we show it…",
+      });
       const run = await runGrokVideoJob({
         data: { job: intent.job, brief },
       });

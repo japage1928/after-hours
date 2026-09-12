@@ -64,8 +64,9 @@ function HelpPage() {
           </Link>
           {" — "}
           its own page, not a Songs tab. Human prompt → Grok writes a video
-          prompt → Grok Imagine renders → Grok QA. Failed QA does not save a
-          library success or keep the quota. Needs{" "}
+          prompt → Grok Imagine (`grok-imagine-video-1.5`) renders → Grok QA
+          of prompt + result metadata (including moderation flags). Failed QA
+          does not save a library success or keep the quota. Needs{" "}
           <code className="text-fg">XAI_API_KEY</code>.
         </p>
       </section>

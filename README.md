@@ -40,8 +40,8 @@ Video is a **separate studio**, not a fourth Songs tab.
 
 1. Human prompt (duration 4 / 8 / 12s, aspect 16:9 · 9:16 · 1:1).
 2. **Grok** (`grok-4.5` via `XAI_API_KEY`) expands it into an Imagine prompt. Local fallback if chat is down.
-3. **Grok Imagine** (`grok-imagine-video-1.5`) renders the MP4. xAI can emit video bytes today — no second vendor.
-4. **Grok QA** of the prompt + output metadata. Unsafe / empty / off-brief → human error, no library success, quota refunded.
+3. **Grok Imagine** (`grok-imagine-video-1.5`) via `POST https://api.x.ai/v1/videos/generations`, then poll `GET /v1/videos/{request_id}` until done. Docs: https://docs.x.ai/developers/model-capabilities/video/generation
+4. **Grok QA** of the prompt + result metadata (and `respect_moderation` if returned). Unsafe / empty / off-brief → human error, no library success, quota refunded.
 5. Play + download. Clip saves under Library → Videos.
 
 Honest label: **Prompt + QA by Grok / xAI; video by Grok Imagine**.
