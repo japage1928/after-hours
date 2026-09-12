@@ -27,6 +27,8 @@ export type BoothModeMeta = {
  * - Generate — describe a song, AI writes a full listen (ACE-Step)
  * - Remix — one owned song rebuilt onto a new beat/style
  * - Mashup — beats of one owned track × lyrics/vocals of another
+ *
+ * Video is a separate studio (`/video`), not a booth tab.
  */
 export const BOOTH_MODES: Record<BoothMode, BoothModeMeta> = {
   generate: {
@@ -168,6 +170,7 @@ export function safeNextPath(raw: string | null | undefined): string {
       path === "/generate" ||
       path === "/mashup" ||
       path === "/remix" ||
+      path === "/video" ||
       path === "/help" ||
       path === "/settings" ||
       path === "/projects" ||

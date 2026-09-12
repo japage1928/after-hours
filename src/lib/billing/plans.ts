@@ -41,18 +41,18 @@ export const FREE_REMIXES_PER_MONTH = 2;
 
 /** Copy for landing, pricing, and the paywall that appears after quota is used. */
 export function freeTierIncludesCopy(): string {
-  return `Free includes ${FREE_REMIXES_PER_MONTH} AI generates or remixes per month`;
+  return `Free includes ${FREE_REMIXES_PER_MONTH} AI generates, remixes, or videos per month`;
 }
 
 export function freeTierBlockedReason(): string {
-  return `Free tier includes ${FREE_REMIXES_PER_MONTH} AI generates or remixes per month. Buy a song credit or start a plan for weekly batches. Mashups of tracks you own don’t use this quota.`;
+  return `Free tier includes ${FREE_REMIXES_PER_MONTH} AI generates, remixes, or videos per month. Buy a song credit or start a plan for weekly batches. Mashups of tracks you own don’t use this quota.`;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
   song: {
     id: "song",
     name: "One song",
-    blurb: "One Generate or Remix credit — pay as you go. Mashup stays free.",
+    blurb: "One Generate, Remix, or Video credit — pay as you go. Mashup stays free.",
     priceCents: 299,
     kind: "one_time",
     usageBudgetCents: 0,
@@ -64,7 +64,7 @@ export const PLANS: Record<PlanId, Plan> = {
   basic: {
     id: "basic",
     name: "Basic",
-    blurb: "4 Generate or Remix jobs each week (16 / month). Mashup unlimited.",
+    blurb: "4 Generate, Remix, or Video jobs each week (16 / month). Mashup unlimited.",
     priceCents: 999,
     kind: "subscription",
     usageBudgetCents: 300,
@@ -76,7 +76,7 @@ export const PLANS: Record<PlanId, Plan> = {
   plus: {
     id: "plus",
     name: "Plus",
-    blurb: "8 Generate or Remix jobs each week (32 / month). Mashup unlimited.",
+    blurb: "8 Generate, Remix, or Video jobs each week (32 / month). Mashup unlimited.",
     priceCents: 1999,
     kind: "subscription",
     usageBudgetCents: 600,
@@ -88,7 +88,7 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    blurb: "12 Generate or Remix jobs each week (48 / month). Mashup unlimited.",
+    blurb: "12 Generate, Remix, or Video jobs each week (48 / month). Mashup unlimited.",
     priceCents: 2999,
     kind: "subscription",
     usageBudgetCents: 900,

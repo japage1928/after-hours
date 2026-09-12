@@ -4,6 +4,7 @@ import {
   capabilityCopy,
   engineLabel,
   humanizeStudioError,
+  videoCapabilityCopy,
 } from "./studio-errors.ts";
 
 describe("humanizeStudioError", () => {
@@ -49,13 +50,28 @@ describe("humanizeStudioError", () => {
   it("turns quota blocks into paywall copy", () => {
     const raw =
       "Free tier includes 2 AI generates or remixes per month. Buy a mix credit or start a plan for weekly batches. Mashups of tracks you own don’t use this quota.";
-    assert.match(humanizeStudioError(raw), /out of AI songs/i);
+    assert.match(humanizeStudioError(raw), /out of AI jobs/i);
     assert.match(humanizeStudioError(raw), /plan/i);
   });
 
   it("explains timeouts and 5xx without leaking setup", () => {
     assert.match(humanizeStudioError("The operation timed out"), /too long|retry/i);
     assert.match(humanizeStudioError("ACE-Step failed (503)"), /down or busy/i);
+  });
+
+  it("does not swallow Grok Imagine render or QA errors as a missing key", () => {
+    assert.match(
+      humanizeStudioError("Grok Imagine blocked this clip for safety."),
+      /safety/i,
+    );
+    assert.match(
+      humanizeStudioError("Grok Imagine is busy. Try again in a minute."),
+      /busy/i,
+    );
+    assert.doesNotMatch(
+      humanizeStudioError("Grok Imagine failed (400): Prompt cannot be empty."),
+      /music model/i,
+    );
   });
 
   it("explains oversized uploads", () => {
@@ -112,5 +128,27 @@ describe("engineLabel", () => {
     const label = engineLabel({ aceStep: true, xai: true });
     assert.match(label, /ACE-Step/);
     assert.doesNotMatch(label, /Suno/i);
+  });
+});
+
+describe("videoCapabilityCopy", () => {
+  it("labels Grok Imagine honestly", () => {
+    const { engineLabel: label } = videoCapabilityCopy({
+      video: true,
+      owner: false,
+    });
+    assert.match(label, /Prompt \+ QA by Grok/);
+    assert.match(label, /Grok Imagine/);
+    assert.doesNotMatch(label, /Suno/i);
+    assert.doesNotMatch(label, /OpenAI/i);
+  });
+
+  it("gives the owner a setup hint when XAI_API_KEY is missing", () => {
+    const owner = videoCapabilityCopy({ video: false, owner: true });
+    assert.match(owner.engineLabel, /not configured/i);
+    assert.match(owner.setupHint ?? "", /XAI_API_KEY/);
+    const user = videoCapabilityCopy({ video: false, owner: false });
+    assert.match(user.engineLabel, /temporarily unavailable/i);
+    assert.equal(user.setupHint, null);
   });
 });

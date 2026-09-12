@@ -227,6 +227,12 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
   };
 }
 
+export type UsageRecord = {
+  via: "song_credit" | "subscription" | "free";
+  ledgerId: string;
+  songCreditId?: string;
+};
+
 /** Consume a song credit or record a remix against free/sub quota. */
 export async function recordUsage(opts: {
   userId: string;
@@ -234,7 +240,7 @@ export async function recordUsage(opts: {
   amountCents: number;
   description: string;
   preferSongCredit?: boolean;
-}): Promise<{ via: "song_credit" | "subscription" | "free" }> {
+}): Promise<UsageRecord> {
   const sql = await getSql();
   const preferCredit = opts.preferSongCredit !== false;
   if (preferCredit) {
@@ -253,13 +259,14 @@ export async function recordUsage(opts: {
     `;
     const row = consumed[0];
     if (row) {
+      const ledgerId = newId("use");
       if (opts.kind === "mix_plan" || opts.kind === "remix") {
         const week = currentWeekWindow();
         await sql`
           insert into usage_ledger (
             id, user_id, kind, amount_cents, description, period_start, period_end
           ) values (
-            ${newId("use")},
+            ${ledgerId},
             ${opts.userId},
             ${"mix_plan_credit"},
             ${0},
@@ -274,7 +281,7 @@ export async function recordUsage(opts: {
           insert into usage_ledger (
             id, user_id, kind, amount_cents, description, period_end
           ) values (
-            ${newId("use")},
+            ${ledgerId},
             ${opts.userId},
             ${"song_bundle"},
             ${0},
@@ -283,7 +290,7 @@ export async function recordUsage(opts: {
           )
         `;
       }
-      return { via: "song_credit" };
+      return { via: "song_credit", ledgerId, songCreditId: row.id };
     }
   }
 
@@ -296,11 +303,12 @@ export async function recordUsage(opts: {
     const sub = await getActiveSubscription(opts.userId);
     if (!sub) throw new Error("No active subscription.");
     const week = currentWeekWindow();
+    const ledgerId = newId("use");
     await sql`
       insert into usage_ledger (
         id, user_id, kind, amount_cents, description, period_start, period_end
       ) values (
-        ${newId("use")},
+        ${ledgerId},
         ${opts.userId},
         ${opts.kind},
         ${opts.amountCents},
@@ -309,16 +317,17 @@ export async function recordUsage(opts: {
         ${week.end}
       )
     `;
-    return { via: "subscription" };
+    return { via: "subscription", ledgerId };
   }
 
   if (entitlement.source === "free") {
     const month = currentMonthWindow();
+    const ledgerId = newId("use");
     await sql`
       insert into usage_ledger (
         id, user_id, kind, amount_cents, description, period_start, period_end
       ) values (
-        ${newId("use")},
+        ${ledgerId},
         ${opts.userId},
         ${opts.kind},
         ${0},
@@ -327,10 +336,31 @@ export async function recordUsage(opts: {
         ${month.end}
       )
     `;
-    return { via: "free" };
+    return { via: "free", ledgerId };
   }
 
   throw new Error("No remix quota available.");
+}
+
+/** Undo a reserved AI job so a failed/QA-rejected render does not burn quota. */
+export async function refundUsage(opts: {
+  userId: string;
+  record: UsageRecord;
+}): Promise<void> {
+  const sql = await getSql();
+  await sql`
+    delete from usage_ledger
+    where id = ${opts.record.ledgerId}
+      and user_id = ${opts.userId}
+  `;
+  if (opts.record.via === "song_credit" && opts.record.songCreditId) {
+    await sql`
+      update song_credit
+      set remaining = remaining + 1
+      where id = ${opts.record.songCreditId}
+        and user_id = ${opts.userId}
+    `;
+  }
 }
 
 /** True when a single-song purchase still covers vocal render. */

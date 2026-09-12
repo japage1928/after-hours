@@ -8,11 +8,13 @@ import {
 } from "./booth-mode.ts";
 
 describe("booth modes", () => {
-  it("exposes generate, remix, and mashup in that order", () => {
+  it("keeps the music booth to generate, remix, and mashup", () => {
     assert.deepEqual(BOOTH_MODE_ORDER, ["generate", "remix", "mashup"]);
     assert.equal(isBoothMode("generate"), true);
+    assert.equal(isBoothMode("video"), false);
     assert.equal(isBoothMode("write"), false);
     assert.equal(BOOTH_MODES.generate.path, "/generate");
+    assert.equal("video" in BOOTH_MODES, false);
   });
 
   it("seeds Generate with an example prompt so the first visit is not blank", () => {
@@ -24,9 +26,10 @@ describe("booth modes", () => {
     );
   });
 
-  it("allows generate as a post-login redirect", () => {
+  it("allows generate and video as post-login redirects", () => {
     assert.equal(safeNextPath("/generate"), "/generate");
     assert.equal(safeNextPath("/remix"), "/remix");
+    assert.equal(safeNextPath("/video"), "/video");
     assert.equal(safeNextPath("/help"), "/help");
     assert.equal(safeNextPath(""), "/generate");
     assert.equal(safeNextPath(undefined), "/generate");

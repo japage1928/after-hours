@@ -8,6 +8,8 @@ import {
   getEntitlement,
   hasOpenSongBundle,
   recordUsage,
+  refundUsage,
+  type UsageRecord,
 } from "@/lib/billing/usage";
 
 export async function currentUserEmail(
@@ -87,4 +89,34 @@ export async function chargeAfterMix(userId: string): Promise<void> {
     description: "AI song generation (ACE-Step)",
     preferSongCredit: true,
   });
+}
+
+/** Reserve one AI job before Grok Imagine runs. Refund if QA/render fails. */
+export async function chargeAfterVideo(
+  userId: string,
+): Promise<UsageRecord | null> {
+  if (process.env.VITE_AUTH_ENABLED === "false" || userId === "dev-user") {
+    return null;
+  }
+  const email = await currentUserEmail(userId);
+  if (isAdminEmail(email)) return null;
+  return recordUsage({
+    userId,
+    kind: "mix_plan",
+    amountCents: estimateMixCostCents(),
+    description: "AI video generation (Grok Imagine)",
+    preferSongCredit: true,
+  });
+}
+
+export async function refundUsageRecord(
+  userId: string,
+  record: UsageRecord | null,
+): Promise<void> {
+  if (!record) return;
+  try {
+    await refundUsage({ userId, record });
+  } catch {
+    /* best-effort — never hide the original generate/QA error */
+  }
 }
